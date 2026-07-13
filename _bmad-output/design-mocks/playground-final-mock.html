@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playground — Final Composite (D × F)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400;1,9..144,600&family=Nunito:wght@400;600;700;800;900&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Nunito',sans-serif;background:#0d0d10;overflow:hidden}
+:root{
+  --bg:#faf6f1;--panel:#fff;--ink:#453a4e;--dim:#a196ad;--line:#eee5f2;
+  --vio:#7048a8;--vio-soft:#f3ebfa;--coral:#ff7d6b;--coral2:#ff6f91;
+  --mint:#e4f4e0;--mint-ink:#2e7040;--amber:#fff3d6;--amber-ink:#8a6414;
+}
+#stage{position:absolute;inset:0 0 56px 0;background:var(--bg)}
+#toolbar{position:fixed;left:0;right:0;bottom:0;height:56px;background:#0d0d10;color:#e9e4da;display:flex;align-items:center;gap:14px;padding:0 18px;z-index:99;border-top:1px solid #26262e}
+#toolbar .t{font-family:'Fraunces',serif;font-weight:600;font-size:16px}
+#toolbar .c{font-size:12px;color:#9a9aa6;flex:1}
+#toolbar button{background:#1d1d24;color:#e9e4da;border:1px solid #33333d;border-radius:8px;height:36px;font-size:13px;cursor:pointer;padding:0 14px}
+#toolbar button.on{background:#e9e4da;color:#0d0d10;font-weight:700}
+
+/* ================= APP GRID (resizable) ================= */
+#app{position:absolute;inset:0;display:grid;grid-template-columns:270px 6px 1fr 6px 460px}
+.gutter{background:transparent;position:relative;cursor:col-resize;z-index:5}
+.gutter::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:4px;height:44px;border-radius:3px;background:#ddd0e8;opacity:.7;transition:.15s}
+.gutter:hover::after,.gutter.drag::after{background:var(--vio);opacity:1;height:70px}
+
+/* ================= SIDEBAR (F structure, D skin) ================= */
+#side{background:var(--vio-soft);margin:14px 0 14px 14px;border-radius:24px;padding:18px 14px;display:flex;flex-direction:column;gap:6px;overflow:auto;min-width:0}
+#side .logo{font-weight:900;font-size:20px;color:var(--vio);padding:0 6px;margin-bottom:8px}
+#side .newbtn{background:var(--vio);color:#fff;border-radius:14px;padding:11px;font-weight:900;font-size:13.5px;text-align:center;box-shadow:0 4px 0 #57367f;margin-bottom:10px}
+#side h6{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#a98fc9;padding:8px 6px 4px}
+.convo{border-radius:14px;padding:9px 11px;font-size:13px;font-weight:700;color:#7d6f8a;display:flex;align-items:center;gap:7px}
+.convo .pencil{margin-left:auto;opacity:0;font-size:11px}
+.convo:hover .pencil{opacity:.6}
+.convo.on{background:#fff;color:var(--ink);box-shadow:0 2px 8px rgba(90,60,130,.12)}
+.convo.renaming{background:#fff;outline:2px solid var(--vio)}
+.convo.renaming input{border:none;outline:none;font:inherit;color:var(--ink);width:100%;background:transparent}
+.arts{margin:2px 0 6px 14px;border-left:2px solid #e2d5ee;padding-left:10px;display:flex;flex-direction:column;gap:4px}
+.art{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:#8d7f9c;padding:5px 8px;border-radius:9px}
+.art.on{background:#fff;color:var(--vio);box-shadow:0 1px 4px rgba(90,60,130,.1)}
+.art .ic{width:22px;height:26px;border-radius:4px;background:linear-gradient(160deg,#fff 55%,#efe6f7);border:1px solid #e2d5ee;flex:none;position:relative}
+.art .ic::after{content:"";position:absolute;inset:5px 4px auto 4px;height:2px;background:#cbb8de;box-shadow:0 4px 0 #ddd0e8,0 8px 0 #ddd0e8}
+#side .foot{margin-top:auto;font-size:11px;color:#a98fc9;padding:10px 6px 0;line-height:1.5}
+#side .foot b{color:var(--vio)}
+
+/* ================= CHAT ================= */
+#chat{display:flex;flex-direction:column;padding:22px 26px 16px;min-width:0}
+#chat .hdr{display:flex;align-items:center;gap:11px;margin-bottom:6px}
+#chat .ava{width:42px;height:42px;border-radius:16px;background:linear-gradient(135deg,var(--coral),var(--coral2));color:#fff;display:grid;place-items:center;font-weight:900;font-size:17px;font-family:'Fraunces',serif;flex:none}
+#chat .hdr b{font-size:16px;font-weight:900;color:var(--ink)}
+#chat .hdr small{display:block;font-size:11.5px;color:var(--dim);font-weight:700}
+#chat .hdr .mode{margin-left:auto;background:var(--amber);color:var(--amber-ink);font-size:11px;font-weight:900;border-radius:99px;padding:6px 13px}
+#chat .msgs{flex:1;overflow:auto;display:flex;flex-direction:column;gap:13px;padding:14px 4px 6px}
+.b{max-width:82%;padding:12px 16px;border-radius:18px;font-size:13.5px;line-height:1.55;font-weight:600;color:var(--ink)}
+.b.mary{background:var(--panel);box-shadow:0 2px 8px rgba(90,60,130,.09);border-bottom-left-radius:6px}
+.b.user{background:var(--vio);color:#fff;align-self:flex-end;border-bottom-right-radius:6px}
+.b .ref{background:var(--vio-soft);color:var(--vio);border-radius:8px;padding:1px 7px;font-weight:900;font-size:12.5px;white-space:nowrap}
+.b.user .ref{background:#ffffff2b;color:#fff}
+.b.honest{background:var(--amber);box-shadow:none;font-size:12.5px;color:#6b5620}
+.b.honest b{color:var(--amber-ink)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chips .lbl{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+.chip{background:#fff;border:1.5px solid #e6dcf0;color:var(--ink);font-size:12px;font-weight:800;padding:8px 14px;border-radius:99px;box-shadow:0 1px 4px rgba(90,60,130,.07);cursor:pointer}
+.chip:hover{border-color:var(--vio);color:var(--vio)}
+.chip.hot{background:var(--vio);border-color:var(--vio);color:#fff}
+.chip.soft{background:var(--mint);border-color:transparent;color:var(--mint-ink)}
+#chat .inputw{margin-top:14px}
+#chat .atrow{display:none;background:#fff;border-radius:14px;box-shadow:0 8px 26px rgba(90,60,130,.16);padding:8px;margin-bottom:8px;max-width:340px}
+#chat .atrow.show{display:block}
+#chat .atrow .opt{display:flex;gap:9px;align-items:center;padding:8px 10px;border-radius:10px;font-size:12.5px;font-weight:800;color:var(--ink)}
+#chat .atrow .opt:first-child{background:var(--vio-soft);color:var(--vio)}
+#chat .atrow .opt small{color:var(--dim);font-weight:700;margin-left:auto}
+#chat .input{background:#fff;border-radius:18px;padding:13px 17px;font-size:13.5px;color:var(--ink);font-weight:600;display:flex;align-items:center;gap:10px;box-shadow:0 2px 10px rgba(90,60,130,.1)}
+#chat .input .ph{color:#b9aec6}
+#chat .input .send{margin-left:auto;width:34px;height:34px;border-radius:13px;background:linear-gradient(135deg,var(--coral),var(--coral2));color:#fff;display:grid;place-items:center;flex:none}
+
+/* ================= DOC PANEL ================= */
+#docpane{margin:14px 14px 14px 0;min-width:0;display:flex;flex-direction:column}
+#docpane .dhdr{display:flex;align-items:center;gap:9px;padding:2px 6px 10px}
+#docpane .dhdr b{font-size:13.5px;font-weight:900;color:var(--ink)}
+#docpane .dhdr .live{width:8px;height:8px;border-radius:50%;background:#4cc38a;box-shadow:0 0 0 3px #4cc38a33}
+#docpane .dhdr .acts{margin-left:auto;display:flex;gap:7px}
+#docpane .dhdr .act{font-size:11px;font-weight:900;border-radius:10px;padding:6px 12px;background:#fff;color:var(--vio);box-shadow:0 1px 4px rgba(90,60,130,.1);cursor:pointer}
+#docpane .dhdr .act.hot{background:var(--vio);color:#fff}
+#paper{flex:1;background:#fffdf9;border-radius:20px;box-shadow:0 14px 44px rgba(90,60,130,.16);overflow:auto;padding:44px 48px}
+#paper .doctitle{font-family:'Fraunces',serif;font-weight:900;font-size:27px;line-height:1.12;color:#2c2433;letter-spacing:-.01em}
+#paper .docmeta{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#a89bb5;margin:10px 0 6px;letter-spacing:.05em}
+#paper .rule{height:3px;background:linear-gradient(90deg,var(--vio) 0 56px,#efe6f7 56px);border-radius:2px;margin:14px 0 22px}
+#paper h3{font-family:'Fraunces',serif;font-weight:700;font-size:17px;color:#2c2433;margin:24px 0 8px;display:flex;align-items:baseline;gap:9px}
+#paper h3 .no{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--vio);font-weight:600}
+#paper p{font-family:'Newsreader',serif;font-size:14.5px;line-height:1.75;color:#4a4152;margin-bottom:10px}
+#paper .hl{background:linear-gradient(180deg,transparent 58%,#ffe9a8 58% 94%,transparent 94%);padding:0 2px}
+#paper .pull{font-family:'Fraunces',serif;font-style:italic;font-weight:600;font-size:18.5px;line-height:1.4;color:#2c2433;border-left:4px solid var(--coral);padding:6px 0 6px 18px;margin:18px 0}
+#paper ul{margin:6px 0 12px 4px;list-style:none}
+#paper ul li{font-family:'Newsreader',serif;font-size:14px;line-height:1.7;color:#4a4152;padding-left:24px;position:relative;margin-bottom:5px}
+#paper ul li::before{content:"◆";position:absolute;left:4px;color:var(--coral);font-size:9px;top:7px}
+#paper .callout{background:var(--mint);border-radius:14px;padding:14px 18px;margin:16px 0}
+#paper .callout b{font-family:'Nunito';font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mint-ink);display:block;margin-bottom:5px}
+#paper .callout p{margin:0;font-size:13.5px}
+#paper table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-family:'Nunito'}
+#paper th{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#a89bb5;text-align:left;padding:7px 10px;border-bottom:2px solid #efe6f7}
+#paper td{font-size:13px;font-weight:700;color:#4a4152;padding:9px 10px;border-bottom:1px solid #f4eef8}
+#paper td .pos{color:var(--mint-ink)}#paper td .neg{color:#c2503f}
+#paper .sig{margin-top:26px;display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#a89bb5;letter-spacing:.08em}
+#paper .sig::before,#paper .sig::after{content:"";flex:1;height:1px;background:#efe6f7}
+
+/* ================= PHONE MODE ================= */
+body.ph #stage{display:grid;place-items:center;background:radial-gradient(circle at 50% 30%,#1c1c22,#0d0d10 75%)}
+body.ph #app{position:relative;inset:auto;width:392px;height:min(96%,800px);border-radius:36px;border:8px solid #060608;box-shadow:0 30px 80px rgba(0,0,0,.65);overflow:hidden;display:flex;flex-direction:column;background:var(--bg)}
+body.ph #side,body.ph .gutter{display:none}
+body.ph #chat{flex:1;min-height:0;padding:16px 16px 10px}
+body.ph #chat .hdr .mode{display:none}
+body.ph #chat .hdr::before{content:"☰";font-size:19px;color:var(--vio);margin-right:2px}
+body.ph .b{max-width:90%}
+body.ph #docpane{margin:0;flex:none;background:#fffdf9;border-radius:22px 22px 0 0;box-shadow:0 -10px 30px rgba(90,60,130,.18);transition:height .25s}
+body.ph #docpane .grab{display:block}
+body.ph #docpane .dhdr{padding:6px 16px 8px}
+body.ph #paper{padding:20px 22px;border-radius:0;box-shadow:none}
+body.ph #paper .doctitle{font-size:21px}
+#docpane .grab{display:none;width:44px;height:5px;border-radius:3px;background:#ddd0e8;margin:8px auto 2px;cursor:ns-resize}
+body.ph #docpane.collapsed #paper{display:none}
+body.ph #docpane.collapsed{height:auto}
+</style>
+</head>
+<body>
+
+<div id="stage">
+<div id="app">
+
+  <!-- SIDEBAR -->
+  <aside id="side">
+    <div class="logo">🪁 playground</div>
+    <div class="newbtn">＋ New conversation</div>
+    <h6>Conversations</h6>
+    <div class="convo renaming">✏️ <input value="Loomcraft rebrand — real job" title="rename"></div>
+    <div class="arts">
+      <div class="art on"><span class="ic"></span>Real Job — working doc</div>
+      <div class="art"><span class="ic"></span>Pricing evidence table</div>
+    </div>
+    <div class="convo">✈️ travel-client pitch <span class="pencil">✏️</span></div>
+    <div class="arts">
+      <div class="art"><span class="ic"></span>Pitch one-pager · sent ✓</div>
+    </div>
+    <div class="convo">🧵 newsletter concept <span class="pencil">✏️</span></div>
+    <div class="arts">
+      <div class="art"><span class="ic"></span>The 5 Rules · pdf</div>
+    </div>
+    <div class="foot"><b>4 documents</b> made this month.<br>Rename any conversation — refer to it anywhere with <b>@</b>.</div>
+  </aside>
+
+  <div class="gutter" id="g1"></div>
+
+  <!-- CHAT -->
+  <main id="chat">
+    <div class="hdr">
+      <div class="ava">M</div>
+      <div><b>Mary</b><small>Business Analyst · brainstorming with you</small></div>
+      <span class="mode">🃏 Job to Be Done</span>
+    </div>
+    <div class="msgs">
+      <div class="b mary">Welcome back! Before we touch the logo — what is the client really <b>hiring</b> this rebrand to do?</div>
+      <div class="b user">honestly? charge more without losing their old customers. same worry I had in <span class="ref">@travel-client pitch</span></div>
+      <div class="b mary">Good catch — I read <span class="ref">@travel-client pitch</span>: there you solved it by <i>anchoring on the outcome, not the rate</i>. Same pattern fits here. That's a <b>pricing-power</b> job, not a design job — it's in your document (section 1). 🎯</div>
+      <div class="chips"><span class="lbl">Mary suggests</span><span class="chip hot">🔥 Pressure-test it</span><span class="chip">⛏️ Keep digging</span><span class="chip">🎲 Switch technique</span><span class="chip soft">✓ Converge & wrap</span></div>
+      <div class="b honest">⚠️ <b>Honest note:</b> you asked me to pull Loomcraft's live Shopify numbers — I can't reach external accounts here. Logged to the builder's wishlist (with your OK). Paste the numbers and I'll fold them in.</div>
+      <div class="b user">use 70% from memory for now</div>
+      <div class="b mary">Done — evidence table updated, marked as <i>unverified</i> so the doc stays honest too. Want the pull-quote punchier?</div>
+    </div>
+    <div class="inputw">
+      <div class="atrow show">
+        <div class="opt">💬 @Loomcraft rebrand — real job <small>this conversation</small></div>
+        <div class="opt">💬 @travel-client pitch <small>3 days ago</small></div>
+        <div class="opt">📄 @The 5 Rules <small>artifact</small></div>
+      </div>
+      <div class="input"><span>@trav</span><span class="ph">… reference a conversation or artifact</span><span class="send">↑</span></div>
+    </div>
+  </main>
+
+  <div class="gutter" id="g2"></div>
+
+  <!-- DOC -->
+  <section id="docpane">
+    <div class="grab" id="grab"></div>
+    <div class="dhdr"><span class="live"></span><b>Real Job — working doc</b>
+      <div class="acts"><span class="act">PDF</span><span class="act">Copy</span><span class="act hot">Send ➤</span></div>
+    </div>
+    <div id="paper">
+      <div class="doctitle">Loomcraft Rebrand — The Real Job</div>
+      <div class="docmeta">SHAPED WITH MARY · JOB TO BE DONE · UPDATED JUST NOW</div>
+      <div class="rule"></div>
+
+      <h3><span class="no">01</span> Hypothesis</h3>
+      <p>The rebrand is not being hired to look better. It is being hired to <span class="hl">justify premium pricing to the customers Loomcraft already has</span> — the "feels off" was never about the logo.</p>
+
+      <div class="pull">"Feels off" decodes as fear of alienating the 70% — not aesthetic doubt.</div>
+
+      <h3><span class="no">02</span> Evidence</h3>
+      <table>
+        <tr><th>Signal</th><th>Reading</th><th>Status</th></tr>
+        <tr><td>70% revenue from existing base</td><td>loyalty is the asset</td><td><span class="neg">unverified</span></td></tr>
+        <tr><td>"Feels off" phrasing</td><td>fear, not taste</td><td><span class="pos">confirmed</span></td></tr>
+        <tr><td>@travel-client pitch pattern</td><td>anchor outcome, not rate</td><td><span class="pos">reused</span></td></tr>
+      </table>
+
+      <h3><span class="no">03</span> What this changes</h3>
+      <ul>
+        <li>Brief the designer on <em>continuity signals</em>, not novelty.</li>
+        <li>Price move ships <em>with</em> the rebrand, not after it.</li>
+        <li>Loyal-customer letter drafts before any public reveal.</li>
+      </ul>
+
+      <div class="callout"><b>✓ Pinned insight</b><p>The rebrand and the price rise are one project wearing two coats. Sell them together or both fail.</p></div>
+
+      <h3><span class="no">04</span> Open question</h3>
+      <p>Would a loyal customer absorb a 20% rise on brand strength alone? <em>Carried to next session.</em></p>
+
+      <div class="sig">MADE IN PLAYGROUND · CONVERSATION: Loomcraft REBRAND</div>
+    </div>
+  </section>
+
+</div>
+</div>
+
+<div id="toolbar">
+  <span class="t">Playground · final composite</span>
+  <span class="c">D (soft) × F (gallery) · drag the purple dividers to resize · doc pane is the star</span>
+  <button class="on" id="devL">💻 Laptop</button>
+  <button id="devP">📱 Phone</button>
+</div>
+
+<script>
+/* ---- resizable columns ---- */
+const app=document.getElementById('app');
+let cols=[270,6,null,6,460]; // null = 1fr
+function apply(){app.style.gridTemplateColumns=cols.map(c=>c===null?'minmax(320px,1fr)':c+'px').join(' ')}
+apply();
+function makeDrag(g,idx,min,max,dir){
+  g.addEventListener('pointerdown',e=>{
+    g.classList.add('drag');g.setPointerCapture(e.pointerId);
+    const startX=e.clientX,start=cols[idx];
+    const move=ev=>{let v=start+(ev.clientX-startX)*dir;cols[idx]=Math.max(min,Math.min(max,v));apply()};
+    const up=()=>{g.classList.remove('drag');removeEventListener('pointermove',move);removeEventListener('pointerup',up)};
+    addEventListener('pointermove',move);addEventListener('pointerup',up);
+  });
+}
+makeDrag(document.getElementById('g1'),0,190,420,1);   // sidebar width
+makeDrag(document.getElementById('g2'),4,320,760,-1);  // doc width (drag left = wider)
+
+/* ---- phone doc-sheet drag ---- */
+const dp=document.getElementById('docpane'),grab=document.getElementById('grab');
+let dpH=300;
+grab.addEventListener('pointerdown',e=>{
+  grab.setPointerCapture(e.pointerId);
+  const sy=e.clientY,sh=dp.offsetHeight;
+  const move=ev=>{dpH=Math.max(64,Math.min(640,sh-(ev.clientY-sy)));dp.style.height=dpH+'px';dp.classList.toggle('collapsed',dpH<110)};
+  const up=()=>{removeEventListener('pointermove',move);removeEventListener('pointerup',up)};
+  addEventListener('pointermove',move);addEventListener('pointerup',up);
+});
+
+/* ---- device toggle ---- */
+const bL=document.getElementById('devL'),bP=document.getElementById('devP');
+function dev(ph){document.body.classList.toggle('ph',ph);bL.classList.toggle('on',!ph);bP.classList.toggle('on',ph);
+  if(ph){dp.style.height=dpH+'px'}else{dp.style.height=''}}
+bL.onclick=()=>dev(false);bP.onclick=()=>dev(true);
+addEventListener('keydown',e=>{if(e.key.toLowerCase()==='m')dev(!document.body.classList.contains('ph'))});
+</script>
+</body>
+</html>

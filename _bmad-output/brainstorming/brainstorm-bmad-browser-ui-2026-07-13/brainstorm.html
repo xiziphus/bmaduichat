@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Second Brain Board — Brainstorm Keepsake</title>
+<style>
+  :root{
+    --bg:#f6f4ef;
+    --bg2:#efeae0;
+    --ink:#221f1a;
+    --ink-soft:#5a544a;
+    --line:#d9d2c4;
+    --card:#fffdf8;
+    --accent:#e8622c;      /* warm ember */
+    --accent2:#2f7d6b;     /* teal */
+    --accent3:#6a4fd0;     /* violet (agents) */
+    --gold:#d8a83a;
+    --shadow:rgba(60,50,30,.14);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#16140f;--bg2:#1e1b14;--ink:#f2ece0;--ink-soft:#b3aa98;
+      --line:#332e24;--card:#201d16;--shadow:rgba(0,0,0,.5);
+      --accent:#ff7a45;--accent2:#4fbfa5;--accent3:#9d86ff;--gold:#e6bd57;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#16140f;--bg2:#1e1b14;--ink:#f2ece0;--ink-soft:#b3aa98;
+    --line:#332e24;--card:#201d16;--shadow:rgba(0,0,0,.5);
+    --accent:#ff7a45;--accent2:#4fbfa5;--accent3:#9d86ff;--gold:#e6bd57;
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f4ef;--bg2:#efeae0;--ink:#221f1a;--ink-soft:#5a544a;
+    --line:#d9d2c4;--card:#fffdf8;--shadow:rgba(60,50,30,.14);
+    --accent:#e8622c;--accent2:#2f7d6b;--accent3:#6a4fd0;--gold:#d8a83a;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.6;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:0 22px}
+  section{padding:64px 0;border-bottom:1px dashed var(--line)}
+  section:last-of-type{border-bottom:none}
+  h1,h2,h3{line-height:1.15;letter-spacing:-.02em;margin:0}
+  a{color:var(--accent)}
+
+  /* theme toggle */
+  .toggle{
+    position:fixed;top:16px;right:16px;z-index:50;
+    background:var(--card);border:1px solid var(--line);color:var(--ink);
+    border-radius:999px;padding:8px 14px;font-size:13px;cursor:pointer;
+    box-shadow:0 4px 14px var(--shadow);font-family:var(--mono);
+  }
+  .toggle:hover{border-color:var(--accent)}
+
+  /* ---- hero ---- */
+  .hero{
+    position:relative;padding:86px 0 70px;overflow:hidden;
+    background:
+      radial-gradient(900px 420px at 82% -10%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 60%),
+      radial-gradient(700px 400px at 8% 120%, color-mix(in srgb, var(--accent3) 20%, transparent), transparent 60%),
+      var(--bg2);
+    border-bottom:1px solid var(--line);
+  }
+  .grid-bg{position:absolute;inset:0;opacity:.5;pointer-events:none;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:34px 34px;mask-image:radial-gradient(circle at 50% 30%,#000,transparent 78%);
+    -webkit-mask-image:radial-gradient(circle at 50% 30%,#000,transparent 78%);}
+  .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;animation:blink 2.4s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  .hero h1{font-size:clamp(34px,6vw,62px);font-weight:800;max-width:16ch}
+  .hero h1 .hl{color:var(--accent)}
+  .thesis{margin-top:24px;font-size:clamp(17px,2.4vw,21px);color:var(--ink-soft);max-width:60ch}
+  .chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:30px}
+  .chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:8px 15px;font-size:13px;font-family:var(--mono);display:flex;gap:7px;align-items:center}
+  .chip b{color:var(--accent2)}
+  .stack-chip b{color:var(--accent3)}
+
+  /* section chrome */
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent2);margin-bottom:12px}
+  h2.sec{font-size:clamp(24px,3.6vw,34px);font-weight:800;margin-bottom:10px}
+  .lead{color:var(--ink-soft);font-size:17px;max-width:66ch;margin-bottom:34px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 3px 14px var(--shadow)}
+
+  /* ---- incumbent vs wedge ---- */
+  .vs{display:grid;grid-template-columns:1fr auto 1fr;gap:20px;align-items:stretch}
+  @media(max-width:720px){.vs{grid-template-columns:1fr}.vs .vsbar{display:none}}
+  .vsbar{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;color:var(--ink-soft)}
+  .panel-title{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:14px}
+  .incumbent .panel-title{color:var(--ink-soft)}
+  .wedge{border-color:var(--accent)}
+  .wedge .panel-title{color:var(--accent)}
+  .scroll-fade{position:relative;height:150px;overflow:hidden;border-radius:10px;border:1px solid var(--line);background:var(--bg2);padding:12px}
+  .scroll-fade::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 20%,var(--card));}
+  .bubble{font-size:12.5px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 10px;margin-bottom:7px;color:var(--ink-soft);max-width:82%}
+  .bubble.me{margin-left:auto;background:color-mix(in srgb,var(--accent2) 14%,var(--card))}
+  .doc-born{display:flex;flex-direction:column;align-items:center;justify-content:center;height:150px;border-radius:10px;border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--card));position:relative}
+  .doc-icon{font-size:40px;animation:rise 3s ease-in-out infinite}
+  @keyframes rise{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+  .doc-born small{font-family:var(--mono);color:var(--accent);margin-top:6px;letter-spacing:.05em}
+
+  /* ---- empathy map ---- */
+  .empathy{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:620px){.empathy{grid-template-columns:1fr}}
+  .quad{border-left:4px solid var(--accent);padding:16px 18px}
+  .quad.says{border-color:var(--accent2)}
+  .quad.thinks{border-color:var(--accent3)}
+  .quad.feels{border-color:var(--accent)}
+  .quad.does{border-color:var(--gold)}
+  .quad h3{font-size:14px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px}
+  .quad p{margin:0;font-size:15px;color:var(--ink)}
+  .moves{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+  .move{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .move .tag{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.1em}
+  .move p{margin:6px 0 0;font-size:14px}
+
+  /* ---- constraint table ---- */
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px}
+  table{border-collapse:collapse;width:100%;min-width:520px;font-size:14.5px}
+  th,td{text-align:left;padding:12px 15px;border-bottom:1px solid var(--line)}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);background:var(--bg2)}
+  tr:last-child td{border-bottom:none}
+  .real{color:var(--accent);font-weight:700}
+  .imagined{color:var(--accent2);font-weight:700}
+  .verdict{font-size:13px;color:var(--ink-soft)}
+
+  .star{margin-top:26px;border:1px solid var(--gold);border-radius:16px;padding:22px;background:
+    radial-gradient(400px 200px at 100% 0%, color-mix(in srgb,var(--gold) 16%,transparent),transparent 70%),var(--card)}
+  .star .badge{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);border:1px solid var(--gold);border-radius:999px;padding:3px 10px;margin-bottom:12px}
+  .ledger-flow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px;font-size:13px;font-family:var(--mono)}
+  .ledger-flow .step{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+  .ledger-flow .arrow{color:var(--gold)}
+
+  /* ---- chaos hammers ---- */
+  .hammers{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:720px){.hammers{grid-template-columns:1fr}}
+  .hammer{border-radius:16px;padding:20px;border:1px solid var(--line);background:var(--card);position:relative;overflow:hidden}
+  .hammer .h-ico{font-size:30px}
+  .hammer h3{font-size:17px;margin:8px 0 6px}
+  .hammer p{font-size:13.5px;color:var(--ink-soft);margin:0}
+  .status{position:absolute;top:14px;right:14px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:999px}
+  .defused{background:color-mix(in srgb,var(--accent2) 18%,transparent);color:var(--accent2);border:1px solid var(--accent2)}
+  .survived{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent);border:1px solid var(--accent)}
+  .hammer.threat{border-color:var(--accent);border-width:2px}
+  .antidote{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:center}
+  @media(max-width:620px){.antidote{grid-template-columns:1fr}}
+  .mirror{border:1px dashed var(--line);border-radius:14px;padding:20px;text-align:center}
+  .mirror .big{font-size:34px}
+  .mirror .lbl{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin-top:8px}
+  .mirror.chatgpt{color:var(--ink-soft)}
+  .mirror.bmad{border-style:solid;border-color:var(--accent);color:var(--ink)}
+  .mirror.bmad .lbl{color:var(--accent)}
+
+  /* canvas mock */
+  .canvas-demo{margin-top:22px;display:grid;grid-template-columns:1fr 1.15fr;gap:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  @media(max-width:640px){.canvas-demo{grid-template-columns:1fr}}
+  .cd-chat{background:var(--bg2);padding:16px;border-right:1px solid var(--line)}
+  .cd-canvas{background:var(--card);padding:16px}
+  .cd-head{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:10px}
+  .cd-canvas .frame{border:1px solid var(--accent);border-radius:10px;padding:14px;background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--card)),var(--card))}
+  .cd-canvas .frame h4{margin:0 0 6px;font-size:15px}
+  .cd-canvas .frame .barrow{display:flex;gap:5px;margin-top:10px}
+  .cd-canvas .frame .barrow i{height:8px;border-radius:4px;background:var(--accent);opacity:.8}
+  .live{display:inline-flex;gap:6px;align-items:center;font-family:var(--mono);font-size:10px;color:var(--accent2)}
+  .live .dot{background:var(--accent2)}
+
+  /* mvp cut */
+  .mvp{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:620px){.mvp{grid-template-columns:1fr}}
+  .asset{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+  .asset .code{font-family:var(--mono);font-size:12px;color:var(--accent3);white-space:nowrap}
+  .asset p{margin:2px 0 0;font-size:14px;color:var(--ink-soft)}
+  .pull{font-size:clamp(19px,3vw,26px);font-weight:800;line-height:1.3;margin:26px 0 0;letter-spacing:-.02em}
+  .pull em{color:var(--accent);font-style:normal}
+
+  /* discovery timeline */
+  .tl{position:relative;margin-left:14px;padding-left:26px;border-left:2px solid var(--line)}
+  .tl .node{position:relative;margin-bottom:22px}
+  .tl .node::before{content:"";position:absolute;left:-33px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:3px solid var(--bg)}
+  .tl .node h3{font-size:16px;margin-bottom:4px}
+  .tl .node p{margin:0;font-size:14.5px;color:var(--ink-soft)}
+  .tl .node .meta{font-family:var(--mono);font-size:11px;color:var(--accent2);letter-spacing:.08em}
+
+  /* ---- climax / synthesis ---- */
+  .climax{background:
+    radial-gradient(700px 380px at 15% 0%, color-mix(in srgb,var(--accent3) 24%,transparent),transparent 65%),
+    radial-gradient(600px 360px at 90% 100%, color-mix(in srgb,var(--accent) 22%,transparent),transparent 65%),
+    var(--bg2)}
+  .intents{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px}
+  @media(max-width:760px){.intents{grid-template-columns:1fr}}
+  .intent{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;position:relative;transition:transform .2s,box-shadow .2s}
+  .intent:hover{transform:translateY(-4px);box-shadow:0 12px 30px var(--shadow)}
+  .intent .num{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:700}
+  .intent h3{font-size:19px;margin:10px 0 8px}
+  .intent p{margin:0;font-size:14px;color:var(--ink-soft)}
+  .intent:nth-child(1){border-top:4px solid var(--accent)}
+  .intent:nth-child(2){border-top:4px solid var(--accent3)}
+  .intent:nth-child(3){border-top:4px solid var(--accent2)}
+  .metric{margin-top:30px;text-align:center;padding:30px;border:1px dashed var(--gold);border-radius:18px;background:var(--card)}
+  .metric .big{font-size:clamp(42px,9vw,74px);font-weight:800;color:var(--gold);letter-spacing:-.03em;line-height:1}
+  .metric .lbl{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-top:8px}
+  .metric p{max-width:52ch;margin:14px auto 0;color:var(--ink-soft);font-size:15px}
+
+  /* MoSCoW */
+  .moscow{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.moscow{grid-template-columns:1fr}}
+  .mcol{border-radius:16px;border:1px solid var(--line);padding:20px;background:var(--card)}
+  .mcol h3{font-family:var(--mono);font-size:13px;letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .mcol .pill{width:12px;height:12px;border-radius:4px;display:inline-block}
+  .mcol.must{border-left:5px solid var(--accent)} .mcol.must .pill{background:var(--accent)}
+  .mcol.should{border-left:5px solid var(--accent2)} .mcol.should .pill{background:var(--accent2)}
+  .mcol.could{border-left:5px solid var(--accent3)} .mcol.could .pill{background:var(--accent3)}
+  .mcol.wont{border-left:5px solid var(--ink-soft);opacity:.85} .mcol.wont .pill{background:var(--ink-soft)}
+  .mcol ul{margin:0;padding-left:0;list-style:none}
+  .mcol li{font-size:14px;padding:7px 0;border-bottom:1px dashed var(--line);color:var(--ink)}
+  .mcol li:last-child{border-bottom:none}
+  .mcol.wont li{text-decoration:line-through;color:var(--ink-soft)}
+
+  footer{padding:50px 0 70px;text-align:center;color:var(--ink-soft);font-size:13px;font-family:var(--mono)}
+  footer .seal{font-size:34px;margin-bottom:12px}
+  .accent-txt{color:var(--accent)}
+</style>
+</head>
+<body>
+<button class="toggle" id="themeToggle" aria-label="Toggle theme">◐ theme</button>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="grid-bg"></div>
+  <div class="wrap" style="position:relative">
+    <div class="eyebrow"><span class="dot"></span> Brainstorming session · Creative Partner mode · 2026-07-13</div>
+    <h1>The <span class="hl">Second&nbsp;Brain</span> Board</h1>
+    <p class="thesis">A disarming, no-CLI brainstorming board where <b>Mary runs a real method</b> on a CLI-averse GTM strategist — and hands her a structured document she can hold. ChatGPT is a mirror. This is a process with an opinion.</p>
+    <div class="chips">
+      <span class="chip">Persona: <b>Vee</b> · fractional GTM / SEO / AEO</span>
+      <span class="chip stack-chip">Stack: <b>Vercel</b> · <b>Neon</b> · <b>Upstash</b></span>
+      <span class="chip">v1: <b>Mary + Brainstorming</b></span>
+    </div>
+  </div>
+</header>
+
+<!-- JTBD / WEDGE -->
+<section>
+  <div class="wrap">
+    <div class="kicker">The Job to be Done</div>
+    <h2 class="sec">Turn fuzzy thought into a document she didn't have to format</h2>
+    <p class="lead">She supplies the raw, messy ore of an idea. BMad refines it. The must-win job: use real techniques through a friendly UI to distill a fuzzy idea into clear, documented understanding — and pick up BMad familiarity along the way.</p>
+    <div class="vs">
+      <div class="card incumbent">
+        <div class="panel-title">The incumbent · ChatGPT</div>
+        <div class="scroll-fade">
+          <div class="bubble me">so i'm thinking about this GTM idea…</div>
+          <div class="bubble">Great! Here are 7 considerations…</div>
+          <div class="bubble me">yeah but which matters most?</div>
+          <div class="bubble">It depends on your goals…</div>
+          <div class="bubble me">wait what did we decide</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--ink-soft);margin:14px 0 0">Everything lives in the scroll. Nothing becomes durable. The insight dies where it was born.</p>
+      </div>
+      <div class="vsbar">the&nbsp;wedge</div>
+      <div class="card wedge">
+        <div class="panel-title">Our wedge · same UX, real output</div>
+        <div class="doc-born">
+          <div class="doc-icon">📄</div>
+          <small>a document is born</small>
+        </div>
+        <p style="font-size:13.5px;color:var(--ink);margin:14px 0 0">Same disarming chat. But the conversation <b>crystallizes into a saved, exportable artifact</b> — the thing that survives the scroll.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EMPATHY MAP -->
+<section style="background:var(--bg2)">
+  <div class="wrap">
+    <div class="kicker">Technique 01 · Empathy Map</div>
+    <h2 class="sec">Reading the room before designing the room</h2>
+    <p class="lead">An imagined composite of the user we're serving — mapped so every UI decision answers a real feeling, not a guess.</p>
+    <div class="empathy">
+      <div class="card quad says"><h3>Says</h3><p>"Just show me." · "Nothing to install."</p></div>
+      <div class="card quad thinks"><h3>Thinks</h3><p>"Is my idea any good?" · "Where do I even start?"</p></div>
+      <div class="card quad feels"><h3>Feels</h3><p>Excited to wrestle a fuzzy idea · intimidated by tooling · wants to feel <b>capable, not managed</b>.</p></div>
+      <div class="card quad does"><h3>Does</h3><p>Rambles in ChatGPT… then loses it.</p></div>
+    </div>
+    <div class="moves">
+      <div class="move"><span class="tag">UI MOVE</span><p>Zero-install, one shareable link. No setup ritual at all.</p></div>
+      <div class="move"><span class="tag">UI MOVE</span><p>"Start here" technique picker that kills the blank-page problem.</p></div>
+      <div class="move"><span class="tag">UI MOVE</span><p>Auto-save + resumable sessions on memlogs — "pick up where you left off."</p></div>
+      <div class="move"><span class="tag">UI MOVE</span><p>Celebrate the moment a document is <em>born</em> out of the chat.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- CONSTRAINT MAPPING -->
+<section>
+  <div class="wrap">
+    <div class="kicker">Technique 02 · Constraint Mapping</div>
+    <h2 class="sec">Which walls are real, which are imagined</h2>
+    <p class="lead">The stack is fixed (Vercel + Neon + Upstash). So we sorted every worry into a genuine limit vs. a solvable one. Only one true wall stood.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Concern</th><th>Verdict</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Remote / HTTP MCP servers</td><td class="imagined">Imagined</td><td class="verdict">Work fine from Vercel serverless — the agent route acts as MCP client.</td></tr>
+          <tr><td>Local stdio / Docker MCP servers</td><td class="real">REAL wall</td><td class="verdict">Can't run on serverless. Route around via a small always-on host, or provider-hosted connectors.</td></tr>
+          <tr><td>Code execution / sandbox</td><td class="real">REAL wall</td><td class="verdict">The one genuine hard limit — and it becomes pedagogy (see below).</td></tr>
+          <tr><td>Per-user OAuth (Gmail/Drive)</td><td class="imagined">Complex, not blocked</td><td class="verdict">Real effort, ties into the auth thread — deferred, not impossible.</td></tr>
+          <tr><td>Rendering self-contained HTML artifacts</td><td class="imagined">Imagined</td><td class="verdict">HTML is just text the model emits; rendering is standard web engineering.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="star">
+      <span class="badge">★ Star idea</span>
+      <h3 style="font-size:20px;margin-bottom:6px">The Capability-Gap Feedback Ledger</h3>
+      <p style="color:var(--ink-soft);margin:0;font-size:15px">When an agent hits something it <em>can't</em> do in this environment, it never says "I can't." It says <b>"great idea — noted for the builder."</b> The gap is logged with its <b>why</b>, task context, and frequency — becoming an evidence-backed, auto-prioritized build backlog. Graceful degradation as delight. (Very BMad — it mirrors the deferred-work ledger / memlog pattern.)</p>
+      <div class="ledger-flow">
+        <span class="step">agent detects gap mid-flow</span>
+        <span class="arrow">→</span>
+        <span class="step">logged w/ why + context + frequency</span>
+        <span class="arrow">→</span>
+        <span class="step">consent "outbox" she reviews</span>
+        <span class="arrow">→</span>
+        <span class="step">sent to builder (Bloompzah)</span>
+      </div>
+      <p style="color:var(--ink-soft);margin:16px 0 0;font-size:14px">Implementation seed: each agent carries a <b>capability manifest</b> in its system prompt — what THIS env can and can't do — so it self-recognizes gaps accurately. The rule: <em>whatever can't be done in this environment becomes part of the document.</em></p>
+    </div>
+  </div>
+</section>
+
+<!-- CHAOS ENGINEERING -->
+<section style="background:var(--bg2)">
+  <div class="wrap">
+    <div class="kicker">Technique 03 · Chaos Engineering</div>
+    <h2 class="sec">Three hammers, swung hard</h2>
+    <p class="lead">We tried to kill the product on purpose. Two threats got defused. One survived — and everything now rests on beating it.</p>
+    <div class="hammers">
+      <div class="hammer">
+        <span class="status defused">defused</span>
+        <div class="h-ico">💸</div>
+        <h3>The bill bomb</h3>
+        <p>Solved at the app level: in-app quotas. Give her a <b>$10 sandbox</b> to play within. No cloud console needed.</p>
+      </div>
+      <div class="hammer">
+        <span class="status defused">defused</span>
+        <div class="h-ico">🪦</div>
+        <h3>The graveyard loop</h3>
+        <p>Even if capability gaps pile up, she's still using it and the builder still gets signal. Not fatal — gaps live on the periphery, never blocking the core loop.</p>
+      </div>
+      <div class="hammer threat">
+        <span class="status survived">survived</span>
+        <div class="h-ico">😐</div>
+        <h3>The "meh death"</h3>
+        <p>Undifferentiation vs. ChatGPT. If it feels like just another chat box, it dies. The whole product now rests on beating this.</p>
+      </div>
+    </div>
+
+    <p class="pull">The antidote to <em>meh</em>: the magic isn't the chat — it's that the agent <em>runs a real method on her</em> and hands her a structured artifact she couldn't make alone.</p>
+
+    <div class="antidote">
+      <div class="mirror chatgpt"><div class="big">🪞</div><div class="lbl">ChatGPT = a mirror</div></div>
+      <div class="mirror bmad"><div class="big">🧭</div><div class="lbl">BMad = a process with an opinion</div></div>
+    </div>
+
+    <div class="canvas-demo">
+      <div class="cd-chat">
+        <div class="cd-head">chat</div>
+        <div class="bubble me">make the headline bolder + add a CTA</div>
+        <div class="bubble">Done — updating the canvas now.</div>
+        <div class="bubble me">now try a teal accent</div>
+      </div>
+      <div class="cd-canvas">
+        <div class="cd-head">canvas <span class="live"><span class="dot" style="width:6px;height:6px"></span>live</span></div>
+        <div class="frame">
+          <h4>GTM One-Pager — Luxury Fabric Line</h4>
+          <div style="font-size:12px;color:var(--ink-soft)">Positioning · Audience · Channels</div>
+          <div class="barrow"><i style="width:60%"></i><i style="width:38%;opacity:.5"></i></div>
+          <div class="barrow"><i style="width:80%"></i><i style="width:24%;opacity:.5"></i></div>
+        </div>
+      </div>
+    </div>
+    <p style="font-size:14px;color:var(--ink-soft);margin-top:14px">The winning weapon = <b>THE CANVAS</b>. A live artifact she can see, interact with, and change in real time by talking. "Lovable-lite within boundaries" — self-contained HTML, no code exec, no deploy. She's on ChatGPT Free (no Canvas), so this feels genuinely premium. The boundary <em>is</em> the safety.</p>
+  </div>
+</section>
+
+<!-- $0 MANDATE / MVP CUT -->
+<section>
+  <div class="wrap">
+    <div class="kicker">Technique 04 · The $0 Mandate</div>
+    <h2 class="sec">Skin the machinery that already runs</h2>
+    <p class="lead">v1 pairing = <b>Mary + Brainstorming</b> — the best on-ramp to introduce anyone to BMad. Techniques surface as buttons: click one and it just keeps going. And the huge leverage: the v1 already exists.</p>
+    <div class="mvp">
+      <div class="asset"><div><div class="code">brain-selector.html</div><p>Techniques-as-buttons — the one-click launch surface.</p></div></div>
+      <div class="asset"><div><div class="code">memlog.py</div><p>Auto-save &amp; resume — resumable sessions for free.</p></div></div>
+      <div class="asset"><div><div class="code">finalize.md</div><p>The synthesis pass that becomes the canvas artifact.</p></div></div>
+      <div class="asset"><div><div class="code">a browser skin</div><p>Wrap what works. Don't rebuild from scratch.</p></div></div>
+    </div>
+    <p class="pull">The v1 <em>is this very session</em> — with a browser skin on it.</p>
+  </div>
+</section>
+
+<!-- DISCOVERY / PIVOT -->
+<section style="background:var(--bg2)">
+  <div class="wrap">
+    <div class="kicker">The Crudo Discovery · a pivot</div>
+    <h2 class="sec">From "a BMad UI" to a "second brain"</h2>
+    <p class="lead">Researching the private-repo folder surfaced context that reshaped the whole thesis.</p>
+    <div class="tl">
+      <div class="node">
+        <div class="meta">FOLDER FINDING</div>
+        <h3>Crudo already runs today</h3>
+        <p>A working BMad custom agent — "GTM Product SEO Strategist" — codifying Vee's SEO/AEO IP. 20 skills, 9 workflows, an SEO rules engine, real client audits. Runs now as the CLI command <code>/crudo</code>.</p>
+      </div>
+      <div class="node">
+        <div class="meta">THE MATCH</div>
+        <h3>The "friend" <em>is</em> Vee</h3>
+        <p>The persona exactly matches the fractional GTM/SEO/AEO strategist the whole private-repo vision is built around. Prior briefs even spec a "command-and-record web app" — but assumed OpenClaw. No Vercel/Neon/Upstash UI exists yet. This brainstorm's UI <em>is</em> the missing app layer.</p>
+      </div>
+      <div class="node">
+        <div class="meta">RECONCILIATION</div>
+        <h3>Brainstorming-first, not Crudo-first</h3>
+        <p>v1 (Mary + brainstorming + canvas) = the disarming on-ramp that builds trust <em>before</em> the high-stakes killer app. Its output artifact becomes the input to Crudo. One funnel, two agents.</p>
+      </div>
+      <div class="node">
+        <div class="meta">PIVOT</div>
+        <h3>A general-purpose second brain</h3>
+        <p>Not SEO-locked. She works on all sorts of problems (her new US/Canada client isn't even SEO). Crudo = future context, not v1. "Second brain" = selective, opt-in memory across sessions and clients — but de-prioritized, because success isn't scale.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CLIMAX / SYNTHESIS -->
+<section class="climax">
+  <div class="wrap">
+    <div class="kicker" style="color:var(--accent3)">The Synthesis · why this exists</div>
+    <h2 class="sec">Three intents. One aha. Ten genuine uses.</h2>
+    <p class="lead">Underneath the product is a purpose. This isn't built to scale — it's an educational proof-of-concept that seeds the next thing for both of them.</p>
+    <div class="intents">
+      <div class="intent">
+        <div class="num">INTENT 01</div>
+        <h3>Meet BMad's method</h3>
+        <p>Show her ChatGPT isn't the best way. Better techniques exist — you just need a proper framework.</p>
+      </div>
+      <div class="intent">
+        <div class="num">INTENT 02</div>
+        <h3>Meet the agents</h3>
+        <p>What agents are, their limitations, and the limits of AI itself. AI is <b>not magic</b> — the honest "I can't, but noted" moments are the lesson.</p>
+      </div>
+      <div class="intent">
+        <div class="num">INTENT 03</div>
+        <h3>Prove structure wins</h3>
+        <p>A structured approach beats ChatGPT on the actual outcome — a document she walks away holding.</p>
+      </div>
+    </div>
+
+    <div class="metric">
+      <div class="big">~10</div>
+      <div class="lbl">genuine uses = success</div>
+      <p>Not retention, not scale, not an 18-month moat. Just enough real usage to spark the aha, teach the lesson, and give both of them <b>enough to work on next</b>. A foundation, not a finish line.</p>
+    </div>
+    <p style="font-size:14px;color:var(--ink-soft);margin-top:22px;text-align:center;max-width:70ch;margin-left:auto;margin-right:auto">The capability-gap ledger and the agent being honest about limits <em>is</em> the mechanism that delivers Intent 02 — the "dead ends" we worried about in Chaos are actually the pedagogy. Showing the seams teaches her AI isn't magic.</p>
+  </div>
+</section>
+
+<!-- MOSCOW -->
+<section>
+  <div class="wrap">
+    <div class="kicker">Convergence · v1 MoSCoW</div>
+    <h2 class="sec">What ships, what waits, what won't</h2>
+    <p class="lead">Where the session landed — the buildable edge of the idea.</p>
+    <div class="moscow">
+      <div class="mcol must">
+        <h3><span class="pill"></span> Must · v1</h3>
+        <ul>
+          <li>No-CLI ChatGPT-style chat + shared-password auth</li>
+          <li>Mary + brainstorming techniques as click-and-go buttons</li>
+          <li>Facilitation that reframes &amp; pushes back (proves structure &gt; ChatGPT)</li>
+          <li>Live canvas artifact</li>
+          <li>Walk-away doc with export + PDF</li>
+          <li>Agent honest about its limits (teaches AI's limits)</li>
+          <li>$10 app-level usage cap</li>
+          <li>Vercel + Neon + Upstash</li>
+        </ul>
+      </div>
+      <div class="mcol should">
+        <h3><span class="pill"></span> Should</h3>
+        <ul>
+          <li>Capability-gap ledger → consent "outbox" to builder</li>
+          <li>Resumable sessions (memlog auto-save)</li>
+          <li>Technique auto-suggest / "start here"</li>
+          <li>Shareable artifact URL</li>
+          <li>Artifact library / gallery</li>
+        </ul>
+      </div>
+      <div class="mcol could">
+        <h3><span class="pill"></span> Could</h3>
+        <ul>
+          <li>True multitenant</li>
+          <li>MCP tool shelf</li>
+          <li>Live voice-editing of HTML artifact (Lovable-lite)</li>
+          <li>More agents beyond Mary</li>
+          <li>Guided "build your own agent" demo</li>
+          <li>Second-brain persistent memory</li>
+        </ul>
+      </div>
+      <div class="mcol wont">
+        <h3><span class="pill"></span> Won't · this time</h3>
+        <ul>
+          <li>Crudo delivery</li>
+          <li>Code execution / sandbox</li>
+          <li>Autonomous email / heavy integrations</li>
+          <li>Scale / retention / 18-month compounding</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="seal">🧠✨</div>
+  <div>Brainstorming keepsake · Creative Partner mode · 2026-07-13</div>
+  <div style="margin-top:6px">From "a generic BMad UI" → <span class="accent-txt">a disarming board where Mary runs a real method and hands you something to hold.</span></div>
+</footer>
+
+<script>
+(function(){
+  var btn=document.getElementById('themeToggle');
+  var root=document.documentElement;
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme');
+    if(!cur){
+      var sysDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+      cur=sysDark?'dark':'light';
+    }
+    root.setAttribute('data-theme', cur==='dark'?'light':'dark');
+  });
+})();
+</script>
+</body>
+</html>

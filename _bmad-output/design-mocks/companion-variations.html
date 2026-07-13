@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playground — Companion Variations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Karla:wght@400;700;800&family=IBM+Plex+Mono:wght@400;600&family=Sora:wght@400;600;800&family=Nunito:wght@400;700;900&family=Zilla+Slab:wght@400;600&family=Instrument+Serif:ital@0;1&family=Spline+Sans+Mono:wght@400;600&family=Newsreader:ital,opsz@0,6..72;1,6..72&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Karla',sans-serif;background:#0d0d10;overflow:hidden}
+.mock{position:absolute;inset:0 0 64px 0;display:none}
+.mock.active{display:block}
+.scene{position:absolute;inset:0;overflow:hidden}
+body.ph .mock.active{display:grid;place-items:center;background:radial-gradient(circle at 50% 30%,#1c1c22,#0d0d10 75%)}
+body.ph .scene{position:relative;inset:auto;width:392px;height:min(96%,800px);border-radius:36px;border:8px solid #060608;box-shadow:0 30px 80px rgba(0,0,0,.65);overflow:hidden}
+#viewerbar{position:fixed;left:0;right:0;bottom:0;height:64px;background:#0d0d10;color:#e9e4da;display:flex;align-items:center;gap:14px;padding:0 18px;z-index:99;border-top:1px solid #26262e}
+#viewerbar .num{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8b8b96}
+#viewerbar .title{font-family:'Fraunces',serif;font-weight:600;font-size:17px;white-space:nowrap}
+#viewerbar .concept{font-size:12.5px;color:#9a9aa6;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#viewerbar button{background:#1d1d24;color:#e9e4da;border:1px solid #33333d;border-radius:8px;height:38px;min-width:38px;font-size:15px;cursor:pointer;padding:0 10px}
+#viewerbar button:hover{background:#2a2a33}
+#viewerbar button.dev.on{background:#e9e4da;color:#0d0d10;font-weight:700}
+#dots{display:flex;gap:6px}
+#dots span{width:22px;height:22px;border-radius:6px;background:#1d1d24;border:1px solid #33333d;font-family:'IBM Plex Mono',monospace;font-size:10.5px;display:grid;place-items:center;color:#8b8b96;cursor:pointer}
+#dots span.on{background:#e9e4da;color:#0d0d10;font-weight:600}
+
+/* ========== SHARED COMPANION SKELETON ========== */
+.scene{display:grid;grid-template-columns:240px 1fr 370px}
+.side{display:flex;flex-direction:column;gap:8px;padding:18px 14px;min-width:0}
+.chat{display:flex;flex-direction:column;padding:24px 32px 18px;min-width:0}
+.canvas{display:flex;flex-direction:column;padding:22px;min-width:0}
+.msgs{flex:1;overflow:auto;display:flex;flex-direction:column;gap:14px;padding-right:6px}
+.b{max-width:78%;padding:12px 15px;font-size:14px;line-height:1.5}
+.b.user{align-self:flex-end}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.doc{flex:1;overflow:auto}
+.foot{margin-top:auto;font-size:11.5px}
+/* shared phone behavior */
+body.ph .scene{display:flex;flex-direction:column}
+body.ph .side{display:none}
+body.ph .chat{flex:1;min-height:0;padding:16px 16px 10px}
+body.ph .b{max-width:88%}
+body.ph .canvas{flex:none;padding:12px 16px}
+body.ph .canvas .doc{display:none}
+body.ph .canvas .chdr{margin:0}
+
+/* ========== V1 · WARM ORIGINAL ========== */
+.v1 .scene{background:#f6f1e7;color:#2b2620}
+.v1 .side{background:#efe7d8;border-right:1px solid #e0d5bf}
+.v1 .logo{font-family:'Fraunces',serif;font-weight:900;font-size:21px;margin-bottom:10px}
+.v1 .logo em{font-style:normal;color:#c2571c}
+.v1 .newbtn{background:#2b2620;color:#f6f1e7;border-radius:10px;padding:10px 12px;font-weight:700;font-size:13.5px;text-align:center}
+.v1 .sess{padding:9px 10px;border-radius:8px;font-size:13px;color:#5c5344}
+.v1 .sess.on{background:#fff;box-shadow:0 1px 3px rgba(60,40,10,.1);color:#2b2620;font-weight:700}
+.v1 .foot{color:#8a7c62}
+.v1 .agenthdr{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.v1 .ava{width:38px;height:38px;border-radius:50%;background:#c2571c;color:#fff;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;flex:none}
+.v1 .agenthdr b{font-family:'Fraunces',serif;font-size:16px}
+.v1 .agenthdr small{display:block;font-size:11.5px;color:#8a7c62}
+.v1 .b{border-radius:14px}
+.v1 .b.mary{background:#fff;border:1px solid #e6dcc8;border-top-left-radius:4px}
+.v1 .b.user{background:#2b2620;color:#f2ecdf;border-bottom-right-radius:4px}
+.v1 .chip{background:#fbe8d8;border:1px solid #eab98b;color:#8a4413;font-size:12.5px;font-weight:700;padding:7px 12px;border-radius:99px}
+.v1 .input{margin-top:16px;background:#fff;border:1px solid #e0d5bf;border-radius:14px;padding:13px 16px;font-size:14px;color:#9a8d74;display:flex;justify-content:space-between;align-items:center}
+.v1 .send{width:30px;height:30px;border-radius:8px;background:#c2571c;color:#fff;display:grid;place-items:center;font-size:14px}
+.v1 .canvas{background:#fff;border-left:1px solid #e0d5bf}
+.v1 .chdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.v1 .chdr b{font-family:'Fraunces',serif;font-size:14px}
+.v1 .exp{font-size:11px;font-weight:700;color:#c2571c;border:1.5px solid #c2571c;border-radius:8px;padding:5px 10px}
+.v1 .doc{border:1px dashed #d8ccb2;border-radius:12px;padding:18px;background:#fdfbf6}
+.v1 .doc h4{font-family:'Fraunces',serif;font-size:16px;margin-bottom:8px}
+.v1 .doc p{font-size:12.5px;line-height:1.6;color:#5c5344}
+.v1 .sk{height:8px;border-radius:4px;background:#eee1cb;margin:8px 0}
+body.ph .v1 .canvas{border-left:none;border-top:1px solid #e0d5bf}
+body.ph .v1 .chdr b::after{content:" — building · tap to open";font-family:'Karla';font-weight:400;font-size:11px;color:#9a8d74}
+
+/* ========== V2 · INK (dark study) ========== */
+.v2 .scene{background:#191817;color:#e8e2d6;font-family:'Zilla Slab',serif}
+.v2 .side{background:#131211;border-right:1px solid #2b2925}
+.v2 .logo{font-family:'Fraunces',serif;font-weight:900;font-size:21px;color:#e8e2d6;margin-bottom:10px}
+.v2 .logo em{font-style:italic;color:#d9a648;font-weight:400}
+.v2 .newbtn{background:#d9a648;color:#241c07;border-radius:8px;padding:10px 12px;font-weight:600;font-size:13.5px;text-align:center;font-family:'Karla'}
+.v2 .sess{padding:9px 10px;border-radius:6px;font-size:13.5px;color:#8f8878}
+.v2 .sess.on{background:#242220;color:#e8e2d6;border-left:3px solid #d9a648}
+.v2 .foot{color:#5f594c;font-family:'Karla'}
+.v2 .agenthdr{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.v2 .ava{width:38px;height:38px;border-radius:8px;background:#d9a648;color:#241c07;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;flex:none}
+.v2 .agenthdr b{font-family:'Fraunces',serif;font-size:16px}
+.v2 .agenthdr small{display:block;font-size:11.5px;color:#8f8878;font-family:'Karla'}
+.v2 .b{border-radius:4px;font-size:14.5px}
+.v2 .b.mary{background:#242220;border-left:3px solid #d9a648}
+.v2 .b.user{background:transparent;border:1px solid #3a372f;color:#cfc7b4;text-align:right}
+.v2 .chip{background:transparent;border:1px solid #d9a64866;color:#d9a648;font-size:12.5px;font-weight:700;padding:7px 12px;border-radius:4px;font-family:'Karla'}
+.v2 .input{margin-top:16px;background:#131211;border:1px solid #2b2925;border-radius:6px;padding:13px 16px;font-size:14px;color:#5f594c;font-style:italic}
+.v2 .canvas{background:#f4efe3;color:#26221b;border-left:none;box-shadow:-18px 0 40px rgba(0,0,0,.45)}
+.v2 .chdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.v2 .chdr b{font-family:'Fraunces',serif;font-size:14px}
+.v2 .exp{font-size:11px;font-weight:700;color:#8a6414;border:1.5px solid #c8a24a;border-radius:6px;padding:5px 10px;font-family:'Karla'}
+.v2 .doc{padding:6px 2px}
+.v2 .doc h4{font-family:'Fraunces',serif;font-size:17px;margin-bottom:8px}
+.v2 .doc p{font-size:13px;line-height:1.7;color:#4c4638}
+.v2 .doc .hl{background:linear-gradient(180deg,transparent 60%,#f3dc9e 60%)}
+body.ph .v2 .canvas{border-top:1px solid #2b2925;box-shadow:none}
+
+/* ========== V3 · CRISP (Swiss light) ========== */
+.v3 .scene{background:#fff;color:#16181d;font-family:'Sora',sans-serif;grid-template-columns:76px 1fr 380px}
+.v3 .side{background:#fff;border-right:1px solid #ecedf1;align-items:center;padding:18px 10px;gap:14px}
+.v3 .glyph{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:17px;background:#f3f4f8;color:#5b616e}
+.v3 .glyph.on{background:#16181d;color:#fff}
+.v3 .logo{font-weight:800;font-size:15px;letter-spacing:-.02em}
+.v3 .foot{color:#b6bac4;font-size:9px;text-align:center}
+.v3 .agenthdr{display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #ecedf1}
+.v3 .ava{width:36px;height:36px;border-radius:50%;background:#3454ff;color:#fff;display:grid;place-items:center;font-weight:800;flex:none}
+.v3 .agenthdr b{font-size:15px;font-weight:800}
+.v3 .agenthdr small{display:block;font-size:11px;color:#9298a5}
+.v3 .tech{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;background:#eef1ff;color:#3454ff;padding:5px 10px;border-radius:6px}
+.v3 .b{border-radius:12px;font-size:13.5px}
+.v3 .b.mary{background:#f3f4f8}
+.v3 .b.user{background:#3454ff;color:#fff}
+.v3 .chip{background:#fff;border:1.5px solid #d6dbe6;color:#16181d;font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:10px}
+.v3 .chip.hot{border-color:#3454ff;color:#3454ff}
+.v3 .input{margin-top:16px;background:#fff;border:1.5px solid #d6dbe6;border-radius:12px;padding:13px 16px;font-size:13.5px;color:#9298a5;display:flex;justify-content:space-between}
+.v3 .send{color:#3454ff;font-weight:800}
+.v3 .canvas{background:#fafbfd;border-left:1px solid #ecedf1}
+.v3 .chdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.v3 .chdr b{font-size:13px;font-weight:800}
+.v3 .exp{font-size:11px;font-weight:800;color:#fff;background:#16181d;border-radius:8px;padding:6px 12px}
+.v3 .doc{background:#fff;border:1px solid #ecedf1;border-radius:12px;padding:20px;box-shadow:0 2px 10px rgba(20,25,40,.04)}
+.v3 .doc h4{font-size:14px;font-weight:800;margin-bottom:8px}
+.v3 .doc p{font-size:12px;line-height:1.65;color:#5b616e}
+.v3 .prog{display:flex;gap:5px;margin-top:14px}
+.v3 .prog i{flex:1;height:5px;border-radius:3px;background:#ecedf1}
+.v3 .prog i.f{background:#3454ff}
+body.ph .v3 .canvas{border-top:1px solid #ecedf1}
+
+/* ========== V4 · SOFT (friendly pastel) ========== */
+.v4 .scene{background:#fbf7f2;color:#43394a;font-family:'Nunito',sans-serif}
+.v4 .side{background:#f3ebfa;border-right:none;margin:14px 0 14px 14px;border-radius:22px;padding:18px 14px}
+.v4 .logo{font-weight:900;font-size:20px;color:#7048a8;margin-bottom:10px}
+.v4 .newbtn{background:#7048a8;color:#fff;border-radius:14px;padding:11px 12px;font-weight:900;font-size:13.5px;text-align:center;box-shadow:0 4px 0 #57367f}
+.v4 .sess{padding:9px 11px;border-radius:12px;font-size:13px;color:#7d6f8a;font-weight:700}
+.v4 .sess.on{background:#fff;color:#43394a;box-shadow:0 2px 6px rgba(90,60,130,.12)}
+.v4 .foot{color:#a396b1}
+.v4 .agenthdr{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.v4 .ava{width:42px;height:42px;border-radius:16px;background:linear-gradient(135deg,#ff9d76,#ff6f91);color:#fff;display:grid;place-items:center;font-weight:900;font-size:17px;flex:none}
+.v4 .agenthdr b{font-size:16px;font-weight:900}
+.v4 .agenthdr small{display:block;font-size:11.5px;color:#a396b1;font-weight:700}
+.v4 .b{border-radius:18px;font-size:13.5px;font-weight:600}
+.v4 .b.mary{background:#fff;box-shadow:0 2px 8px rgba(90,60,130,.09);border-bottom-left-radius:6px}
+.v4 .b.user{background:#7048a8;color:#fff;border-bottom-right-radius:6px}
+.v4 .chip{background:#ffe8dd;color:#b04a22;font-size:12.5px;font-weight:900;padding:8px 14px;border-radius:99px}
+.v4 .chip:nth-child(2){background:#e4f4e0;color:#2e7040}
+.v4 .chip:nth-child(3){background:#e4ecff;color:#3a56b0}
+.v4 .input{margin-top:14px;background:#fff;border-radius:18px;padding:13px 16px;font-size:13.5px;color:#a396b1;font-weight:700;display:flex;justify-content:space-between;box-shadow:0 2px 8px rgba(90,60,130,.09)}
+.v4 .send{width:32px;height:32px;border-radius:12px;background:linear-gradient(135deg,#ff9d76,#ff6f91);color:#fff;display:grid;place-items:center}
+.v4 .canvas{background:transparent;padding:14px}
+.v4 .cardoc{background:#fff;border-radius:22px;box-shadow:0 8px 28px rgba(90,60,130,.13);flex:1;display:flex;flex-direction:column;padding:20px;min-height:0}
+.v4 .chdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.v4 .chdr b{font-size:14px;font-weight:900}
+.v4 .exp{font-size:11px;font-weight:900;color:#7048a8;background:#f3ebfa;border-radius:10px;padding:6px 12px}
+.v4 .doc h4{font-size:14.5px;font-weight:900;margin-bottom:8px}
+.v4 .doc p{font-size:12.5px;line-height:1.6;color:#7d6f8a;font-weight:600}
+.v4 .badge{display:inline-block;background:#e4f4e0;color:#2e7040;font-size:10.5px;font-weight:900;border-radius:8px;padding:4px 9px;margin-top:10px}
+body.ph .v4 .canvas{padding:10px 14px 14px}
+body.ph .v4 .cardoc{padding:12px 16px}
+body.ph .v4 .cardoc .doc{display:none}
+
+/* ========== V5 · DESK (technique tray focus) ========== */
+.v5 .scene{background:#eef0eb;color:#252a23;font-family:'Karla',sans-serif;grid-template-columns:264px 1fr 360px}
+.v5 .side{background:#e2e6dd;border-right:1px solid #d2d8cb;padding:18px 16px;gap:10px}
+.v5 .logo{font-family:'Fraunces',serif;font-weight:900;font-size:20px;margin-bottom:2px}
+.v5 .sublogo{font-size:11px;color:#7c8474;margin-bottom:12px}
+.v5 h6{font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:#7c8474;margin:8px 0 2px}
+.v5 .tcard{background:#fff;border-radius:12px;padding:11px 12px;box-shadow:0 1px 3px rgba(40,50,30,.1)}
+.v5 .tcard b{font-size:13px;display:block}
+.v5 .tcard span{font-size:11px;color:#7c8474;line-height:1.4;display:block;margin-top:3px}
+.v5 .tcard.on{outline:2px solid #4a7c40;background:#f4faf1}
+.v5 .tcard.on b::after{content:" · running";color:#4a7c40;font-size:11px}
+.v5 .more{font-size:12px;font-weight:700;color:#4a7c40;text-align:center;padding:8px;border:1.5px dashed #a9b6a0;border-radius:10px}
+.v5 .foot{color:#98a08e}
+.v5 .agenthdr{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.v5 .ava{width:38px;height:38px;border-radius:50%;background:#4a7c40;color:#fff;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;flex:none}
+.v5 .agenthdr b{font-family:'Fraunces',serif;font-size:16px}
+.v5 .agenthdr small{display:block;font-size:11.5px;color:#7c8474}
+.v5 .b{border-radius:14px;font-size:14px}
+.v5 .b.mary{background:#fff;box-shadow:0 1px 3px rgba(40,50,30,.08)}
+.v5 .b.user{background:#33402f;color:#eef0eb}
+.v5 .chip{background:#fff;border:1.5px solid #b9c4af;color:#33402f;font-size:12.5px;font-weight:700;padding:7px 12px;border-radius:99px}
+.v5 .input{margin-top:16px;background:#fff;border-radius:14px;padding:13px 16px;font-size:14px;color:#98a08e;box-shadow:0 1px 3px rgba(40,50,30,.08)}
+.v5 .canvas{background:#faf9f4;border-left:1px solid #d2d8cb}
+.v5 .chdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.v5 .chdr b{font-family:'Fraunces',serif;font-size:14px}
+.v5 .exp{font-size:11px;font-weight:700;color:#4a7c40;border:1.5px solid #4a7c40;border-radius:8px;padding:5px 10px}
+.v5 .doc{padding:4px 2px}
+.v5 .doc h4{font-family:'Fraunces',serif;font-size:15px;margin:10px 0 6px}
+.v5 .doc p{font-size:12.5px;line-height:1.65;color:#525a4c}
+.v5 .stamp{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;color:#4a7c40;border:1px solid #4a7c40;border-radius:4px;padding:3px 7px;text-transform:uppercase}
+body.ph .v5 .canvas{border-top:1px solid #d2d8cb}
+body.ph .v5 .scene::after{content:"🃏 Techniques";position:absolute;top:12px;right:12px;background:#4a7c40;color:#fff;font-weight:700;font-size:11.5px;border-radius:99px;padding:7px 13px;font-family:'Karla'}
+
+/* ========== V6 · GALLERY (artifact-proud) ========== */
+.v6 .scene{background:#101014;color:#e8e6f0;font-family:'Sora',sans-serif;grid-template-columns:240px 1fr 400px}
+.v6 .side{background:#0b0b0e;border-right:1px solid #232330}
+.v6 .logo{font-family:'Fraunces',serif;font-weight:900;font-size:20px;margin-bottom:12px}
+.v6 .logo em{font-style:italic;color:#8f7bff;font-weight:400}
+.v6 h6{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.2em;color:#5b5b70;text-transform:uppercase;margin:6px 0 4px}
+.v6 .art{background:#17171e;border:1px solid #232330;border-radius:10px;padding:10px 11px;display:flex;gap:9px;align-items:center}
+.v6 .art .th{width:34px;height:42px;border-radius:5px;flex:none;background:linear-gradient(160deg,#f4f1e8 60%,#d9d4c4);position:relative}
+.v6 .art .th::after{content:"";position:absolute;inset:6px 5px auto 5px;height:3px;background:#b9b2a0;border-radius:2px;box-shadow:0 6px 0 #cfc9b8,0 12px 0 #cfc9b8}
+.v6 .art b{font-size:11.5px;display:block}
+.v6 .art span{font-size:9.5px;color:#5b5b70;font-family:'IBM Plex Mono',monospace}
+.v6 .foot{color:#454555}
+.v6 .agenthdr{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.v6 .ava{width:38px;height:38px;border-radius:50%;background:#8f7bff;color:#151022;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;flex:none}
+.v6 .agenthdr b{font-size:15px;font-weight:800}
+.v6 .agenthdr small{display:block;font-size:11px;color:#7a7a90}
+.v6 .b{border-radius:12px;font-size:13.5px}
+.v6 .b.mary{background:#1a1a22;border:1px solid #26262f}
+.v6 .b.user{background:#8f7bff;color:#151022;font-weight:600}
+.v6 .chip{background:transparent;border:1.5px solid #3a3a4c;color:#c9c4e4;font-size:12px;font-weight:700;padding:7px 13px;border-radius:99px}
+.v6 .input{margin-top:16px;background:#17171e;border:1px solid #232330;border-radius:12px;padding:13px 16px;font-size:13.5px;color:#5b5b70}
+.v6 .canvas{background:#0b0b0e;border-left:1px solid #232330;padding:18px}
+.v6 .chdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.v6 .chdr b{font-size:12.5px;font-weight:800}
+.v6 .exp{font-size:10.5px;font-weight:800;color:#151022;background:#8f7bff;border-radius:8px;padding:6px 12px}
+.v6 .paper{flex:1;background:#f4f1e8;color:#221f18;border-radius:10px;padding:26px 28px;overflow:auto;box-shadow:0 24px 60px rgba(0,0,0,.6);transform:rotate(.4deg)}
+.v6 .paper h4{font-family:'Fraunces',serif;font-weight:900;font-size:19px;margin-bottom:4px}
+.v6 .paper .meta{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#8f887a;margin-bottom:14px}
+.v6 .paper p{font-family:'Newsreader',serif;font-size:13.5px;line-height:1.7;color:#3e392e;margin-bottom:10px}
+.v6 .paper .pull{font-family:'Instrument Serif',serif;font-style:italic;font-size:16px;border-left:3px solid #8f7bff;padding-left:12px;margin:12px 0;color:#221f18}
+body.ph .v6 .canvas{border-top:1px solid #232330;padding:12px 16px}
+body.ph .v6 .paper{display:none}
+body.ph .v6 .canvas .chdr b::after{content:" — 3 in your gallery";font-weight:400;color:#7a7a90}
+</style>
+</head>
+<body>
+
+<!-- ===== V1 · WARM ORIGINAL ===== -->
+<section class="mock v1 active" data-title="A · Warm Original" data-concept="The baseline you liked: cream + ink + terracotta, Fraunces headlines, document dashed-in on the right. Cozy, analog, unthreatening.">
+<div class="scene">
+  <div class="side">
+    <div class="logo">play<em>ground</em></div>
+    <div class="newbtn">＋ New session</div>
+    <div class="sess on">🎨 Rebrand idea for Loomcraft</div>
+    <div class="sess">✈️ Q3 travel-client pitch</div>
+    <div class="sess">🧵 Newsletter concept</div>
+    <div class="foot">Every session becomes a document.<br>Nothing gets lost in the scroll.</div>
+  </div>
+  <div class="chat">
+    <div class="agenthdr"><div class="ava">M</div><div><b>Mary</b> · Business Analyst<small>Running: Job to Be Done</small></div></div>
+    <div class="msgs">
+      <div class="b mary">Welcome back! You said the rebrand feels "off." Let's not fix the logo yet — what is the client really <b>hiring</b> this rebrand to do?</div>
+      <div class="b user">Honestly? I think they want to charge more without losing their old customers.</div>
+      <div class="b mary">There it is — that's a <i>pricing-power</i> job, not a design job. 🎯 Added to your document. Pressure-test it, or keep digging?</div>
+      <div class="chips"><span class="chip">Pressure-test it</span><span class="chip">Keep digging</span><span class="chip">Switch technique</span></div>
+    </div>
+    <div class="input">Tell Mary what you're thinking… <span class="send">↑</span></div>
+  </div>
+  <div class="canvas">
+    <div class="chdr"><b>📄 Your document</b><span class="exp">Export ▾</span></div>
+    <div class="doc">
+      <h4>Loomcraft Rebrand — Real Job</h4>
+      <p><b>Hypothesis:</b> the rebrand is hired to justify premium pricing to existing customers.</p>
+      <div class="sk"></div><div class="sk" style="width:80%"></div>
+      <h4 style="margin-top:14px">Evidence so far</h4>
+      <p>· Old customers = 70% revenue<br>· "Feels off" = fear of alienation</p>
+      <p style="margin-top:10px;font-size:11px;color:#9a8d74">Building live as you talk…</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ===== V2 · INK ===== -->
+<section class="mock v2" data-title="B · Ink & Lamplight" data-concept="Dark study, amber accent, slab-serif voice — the chat lives in the dark, the DOCUMENT is the only lit object. Dramatic focus on the artifact.">
+<div class="scene">
+  <div class="side">
+    <div class="logo">play<em>ground</em></div>
+    <div class="newbtn">＋ New session</div>
+    <div class="sess on">Rebrand idea for Loomcraft</div>
+    <div class="sess">Q3 travel-client pitch</div>
+    <div class="sess">Newsletter concept</div>
+    <div class="foot">The page is the point.</div>
+  </div>
+  <div class="chat">
+    <div class="agenthdr"><div class="ava">M</div><div><b>Mary</b> · Business Analyst<small>Running: Job to Be Done</small></div></div>
+    <div class="msgs">
+      <div class="b mary">You said the rebrand feels "off." Before we touch the logo — what is the client really <b>hiring</b> this rebrand to do?</div>
+      <div class="b user">Honestly? Charge more without losing their old customers.</div>
+      <div class="b mary">That's a pricing-power job, not a design job. Watch the page — I've written it in. Shall we pressure-test it?</div>
+      <div class="chips"><span class="chip">Pressure-test</span><span class="chip">Keep digging</span><span class="chip">New technique</span></div>
+    </div>
+    <div class="input">Think out loud — the page keeps up…</div>
+  </div>
+  <div class="canvas">
+    <div class="chdr"><b>Loomcraft Rebrand — working page</b><span class="exp">Export</span></div>
+    <div class="doc">
+      <h4>The Real Job</h4>
+      <p>The rebrand is hired to <span class="hl">justify premium pricing to existing customers</span> — not to look prettier.</p>
+      <h4 style="margin-top:16px">Evidence</h4>
+      <p>Old customers carry 70% of revenue. "Feels off" decodes as fear of alienating them, not aesthetic doubt.</p>
+      <h4 style="margin-top:16px">Next</h4>
+      <p>Pressure-test: would a loyal customer pay 20% more <em>tomorrow</em> if only the brand changed?</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ===== V3 · CRISP ===== -->
+<section class="mock v3" data-title="C · Crisp Product" data-concept="Swiss-clean SaaS: icon rail instead of sidebar, blue accent, progress meter on the doc. Feels like a serious modern tool — least cozy.">
+<div class="scene">
+  <div class="side">
+    <div class="logo">P.</div>
+    <div class="glyph on">💬</div>
+    <div class="glyph">🃏</div>
+    <div class="glyph">📚</div>
+    <div class="glyph">⚙️</div>
+    <div class="foot">v0.1</div>
+  </div>
+  <div class="chat">
+    <div class="agenthdr"><div class="ava">M</div><div><b>Mary</b><small>Business Analyst</small></div><span class="tech">JOB-TO-BE-DONE</span></div>
+    <div class="msgs">
+      <div class="b mary">You said the rebrand feels "off." Let's skip the logo — what is the client really <b>hiring</b> this rebrand to do?</div>
+      <div class="b user">Charge more without losing their old customers, honestly.</div>
+      <div class="b mary">That's a pricing-power job, not a design job. Logged → section 1 of your doc. Next move?</div>
+      <div class="chips"><span class="chip hot">Pressure-test it</span><span class="chip">Keep digging</span><span class="chip">Switch technique</span></div>
+    </div>
+    <div class="input">Message Mary… <span class="send">Send ↵</span></div>
+  </div>
+  <div class="canvas">
+    <div class="chdr"><b>Loomcraft-rebrand.doc</b><span class="exp">Export</span></div>
+    <div class="doc">
+      <h4>1 · The Real Job</h4>
+      <p>Rebrand = justify premium pricing to existing customers.</p>
+      <h4 style="margin-top:14px">2 · Evidence</h4>
+      <p>70% revenue from existing base · "feels off" = alienation fear.</p>
+      <h4 style="margin-top:14px">3 · Open</h4>
+      <p>Would loyal buyers absorb +20% on brand alone?</p>
+      <div class="prog"><i class="f"></i><i class="f"></i><i></i><i></i><i></i></div>
+      <p style="margin-top:6px;font-size:10.5px;color:#9298a5">2 of 5 sections complete</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ===== V4 · SOFT ===== -->
+<section class="mock v4" data-title="D · Soft & Rounded" data-concept="Friendliest possible: pastels, big radii, coral gradient Mary, floating card panels. Zero intimidation — may read 'toy' for client-facing work.">
+<div class="scene">
+  <div class="side">
+    <div class="logo">🪁 playground</div>
+    <div class="newbtn">＋ New session</div>
+    <div class="sess on">🎨 Rebrand for Loomcraft</div>
+    <div class="sess">✈️ Travel-client pitch</div>
+    <div class="sess">🧵 Newsletter idea</div>
+    <div class="foot">You bring the spark.<br>Mary brings the method. ✨</div>
+  </div>
+  <div class="chat">
+    <div class="agenthdr"><div class="ava">M</div><div><b>Mary</b><small>your thinking buddy · Job to Be Done</small></div></div>
+    <div class="msgs">
+      <div class="b mary">Welcome back! 💛 You said the rebrand feels "off." Forget the logo a sec — what's the client really <b>hiring</b> this rebrand to do?</div>
+      <div class="b user">Honestly? Charge more without losing their old customers.</div>
+      <div class="b mary">Ooh, there it is — that's a <b>pricing-power</b> job, not a design job! 🎯 Saved to your doc. Where next?</div>
+      <div class="chips"><span class="chip">🔥 Pressure-test it</span><span class="chip">⛏️ Keep digging</span><span class="chip">🎲 New technique</span></div>
+    </div>
+    <div class="input">Tell Mary what's on your mind… <span class="send">↑</span></div>
+  </div>
+  <div class="canvas">
+    <div class="cardoc">
+      <div class="chdr"><b>📄 Your doc</b><span class="exp">Export</span></div>
+      <div class="doc">
+        <h4>Loomcraft Rebrand — Real Job</h4>
+        <p>The rebrand's real job: justify premium pricing to the customers they already have.</p>
+        <p style="margin-top:8px">Evidence: 70% of revenue = old customers · "feels off" = fear of losing them.</p>
+        <span class="badge">✓ 1 insight pinned</span>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ===== V5 · DESK ===== -->
+<section class="mock v5" data-title="E · The Desk" data-concept="Sidebar = the technique tray (cards live left, always visible), sessions demoted. Makes the METHOD the furniture — strongest BMad teaching layout.">
+<div class="scene">
+  <div class="side">
+    <div class="logo">playground</div>
+    <div class="sublogo">a thinking desk, with Mary</div>
+    <h6>On the desk</h6>
+    <div class="tcard on"><b>Job to Be Done</b><span>what's it really hired for?</span></div>
+    <div class="tcard"><b>Five Whys</b><span>drill to the root cause</span></div>
+    <div class="tcard"><b>Chaos Engineering</b><span>break it, keep what survives</span></div>
+    <div class="more">🎲 draw another technique</div>
+    <div class="foot">Techniques are cards.<br>Pick one up anytime.</div>
+  </div>
+  <div class="chat">
+    <div class="agenthdr"><div class="ava">M</div><div><b>Mary</b> · Business Analyst<small>playing: Job to Be Done</small></div></div>
+    <div class="msgs">
+      <div class="b mary">You picked up <b>Job to Be Done</b> — good instinct for this one. So: the rebrand that "feels off"… what is the client really hiring it to do?</div>
+      <div class="b user">Charge more without losing their old customers.</div>
+      <div class="b mary">That's the card doing its work — a pricing-power job, not a design job. It's on the page. Play this card further, or pick up Five Whys?</div>
+      <div class="chips"><span class="chip">Keep playing this card</span><span class="chip">Pick up Five Whys</span></div>
+    </div>
+    <div class="input">Say it messy — Mary tidies…</div>
+  </div>
+  <div class="canvas">
+    <div class="chdr"><b>📄 The page</b><span class="exp">Export ▾</span></div>
+    <div class="doc">
+      <span class="stamp">Job to Be Done</span>
+      <h4>The Real Job</h4>
+      <p>Rebrand hired to justify premium pricing to existing customers — not aesthetics.</p>
+      <h4>Evidence</h4>
+      <p>70% revenue from existing base; "feels off" = alienation fear.</p>
+      <h4>Carried question</h4>
+      <p>Would loyal buyers pay +20% on brand alone?</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ===== V6 · GALLERY ===== -->
+<section class="mock v6" data-title="F · The Gallery" data-concept="Dark studio where finished docs are trophies: sidebar shows your artifact gallery, canvas renders a lit paper page. Sells 'look what I made' hardest.">
+<div class="scene">
+  <div class="side">
+    <div class="logo">play<em>ground</em></div>
+    <h6>In session</h6>
+    <div class="art"><div class="th"></div><div><b>Loomcraft Rebrand — Real Job</b><span>building now…</span></div></div>
+    <h6>Your gallery</h6>
+    <div class="art"><div class="th"></div><div><b>Travel pitch one-pager</b><span>12 jul · sent to client</span></div></div>
+    <div class="art"><div class="th"></div><div><b>Newsletter — 5 rules</b><span>09 jul · pdf</span></div></div>
+    <div class="art"><div class="th"></div><div><b>Retreat de-risk plan</b><span>02 jul</span></div></div>
+    <div class="foot">Three documents this month.<br>ChatGPT gave you zero.</div>
+  </div>
+  <div class="chat">
+    <div class="agenthdr"><div class="ava">M</div><div><b>Mary</b><small>Business Analyst · Job to Be Done</small></div></div>
+    <div class="msgs">
+      <div class="b mary">You said the rebrand feels "off." Let's not touch the logo — what is the client really <b>hiring</b> this rebrand to do?</div>
+      <div class="b user">Charge more without losing their old customers.</div>
+      <div class="b mary">Pricing-power job, not a design job. It's on the paper — see it take shape. Pressure-test, or dig further?</div>
+      <div class="chips"><span class="chip">Pressure-test</span><span class="chip">Keep digging</span><span class="chip">Switch technique</span></div>
+    </div>
+    <div class="input">Message Mary…</div>
+  </div>
+  <div class="canvas">
+    <div class="chdr"><b>NOW SHAPING</b><span class="exp">Export ▾</span></div>
+    <div class="paper">
+      <h4>Loomcraft Rebrand — The Real Job</h4>
+      <div class="meta">SHAPED WITH MARY · JOB TO BE DONE · 14 JUL 2026</div>
+      <p>The rebrand is not being hired to look better. It is being hired to justify premium pricing to the customers Loomcraft already has.</p>
+      <div class="pull">"Feels off" was never about the logo — it was fear of alienating the 70%.</div>
+      <p>Open question carried forward: would a loyal customer absorb a 20% price rise on the strength of brand alone?</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<div id="viewerbar">
+  <button id="prev">←</button><button id="next">→</button>
+  <span class="num" id="counter">1 / 6</span>
+  <button class="dev on" id="devL">💻 Laptop</button>
+  <button class="dev" id="devP">📱 Phone</button>
+  <span class="title" id="vtitle"></span>
+  <span class="concept" id="vconcept"></span>
+  <div id="dots"></div>
+</div>
+
+<script>
+const mocks=[...document.querySelectorAll('.mock')];
+const dots=document.getElementById('dots');
+mocks.forEach((m,i)=>{const d=document.createElement('span');d.textContent=String.fromCharCode(65+i);d.onclick=()=>go(i);dots.appendChild(d)});
+let cur=0;
+function go(i){cur=(i+mocks.length)%mocks.length;
+ mocks.forEach((m,j)=>m.classList.toggle('active',j===cur));
+ [...dots.children].forEach((d,j)=>d.classList.toggle('on',j===cur));
+ document.getElementById('counter').textContent=(cur+1)+' / '+mocks.length;
+ document.getElementById('vtitle').textContent=mocks[cur].dataset.title;
+ document.getElementById('vconcept').textContent=mocks[cur].dataset.concept;}
+document.getElementById('prev').onclick=()=>go(cur-1);
+document.getElementById('next').onclick=()=>go(cur+1);
+const bL=document.getElementById('devL'),bP=document.getElementById('devP');
+function dev(ph){document.body.classList.toggle('ph',ph);bL.classList.toggle('on',!ph);bP.classList.toggle('on',ph)}
+bL.onclick=()=>dev(false);bP.onclick=()=>dev(true);
+addEventListener('keydown',e=>{
+ if(e.key==='ArrowRight')go(cur+1);
+ if(e.key==='ArrowLeft')go(cur-1);
+ if(e.key.toLowerCase()==='m')dev(!document.body.classList.contains('ph'));
+});
+go(0);
+</script>
+</body>
+</html>

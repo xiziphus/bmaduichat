@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playground — 10 UI/UX Directions (Laptop + Mobile)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Sora:wght@400;600;800&family=Caprasimo&family=Kalam:wght@400;700&family=IBM+Plex+Mono:wght@400;600&family=DM+Serif+Display&family=Nunito:wght@400;700;900&family=Zilla+Slab:wght@400;600&family=Instrument+Serif:ital@0;1&family=Karla:wght@400;700&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* ============ VIEWER CHROME ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Karla',sans-serif;background:#0d0d10;overflow:hidden}
+.mock{position:absolute;inset:0 0 64px 0;display:none}
+.mock.active{display:block}
+.scene{position:absolute;inset:0;overflow:hidden}
+/* phone mode: scene becomes a handset */
+body.ph .mock.active{display:grid;place-items:center;background:
+  radial-gradient(circle at 50% 30%,#1c1c22,#0d0d10 75%)}
+body.ph .scene{position:relative;inset:auto;width:392px;height:min(96%,800px);
+  border-radius:36px;border:8px solid #060608;box-shadow:0 30px 80px rgba(0,0,0,.65);overflow:hidden}
+#viewerbar{position:fixed;left:0;right:0;bottom:0;height:64px;background:#0d0d10;color:#e9e4da;display:flex;align-items:center;gap:14px;padding:0 18px;z-index:99;border-top:1px solid #26262e}
+#viewerbar .num{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8b8b96}
+#viewerbar .title{font-family:'Fraunces',serif;font-weight:600;font-size:17px;white-space:nowrap}
+#viewerbar .concept{font-size:12.5px;color:#9a9aa6;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#viewerbar button{background:#1d1d24;color:#e9e4da;border:1px solid #33333d;border-radius:8px;height:38px;min-width:38px;font-size:15px;cursor:pointer;padding:0 10px}
+#viewerbar button:hover{background:#2a2a33}
+#viewerbar button.dev.on{background:#e9e4da;color:#0d0d10;font-weight:700}
+#dots{display:flex;gap:6px}
+#dots span{width:22px;height:22px;border-radius:6px;background:#1d1d24;border:1px solid #33333d;font-family:'IBM Plex Mono',monospace;font-size:10.5px;display:grid;place-items:center;color:#8b8b96;cursor:pointer}
+#dots span.on{background:#e9e4da;color:#0d0d10;font-weight:600}
+
+/* ============ 1 · THE COMPANION ============ */
+.m1 .scene{background:#f6f1e7;color:#2b2620;font-family:'Karla',sans-serif;display:grid;grid-template-columns:230px 1fr 360px}
+.m1 .side{background:#efe7d8;border-right:1px solid #e0d5bf;padding:18px 14px;display:flex;flex-direction:column;gap:8px}
+.m1 .logo{font-family:'Fraunces',serif;font-weight:900;font-size:21px;margin-bottom:10px}
+.m1 .logo em{font-style:normal;color:#c2571c}
+.m1 .newbtn{background:#2b2620;color:#f6f1e7;border-radius:10px;padding:10px 12px;font-weight:700;font-size:13.5px;text-align:center}
+.m1 .sess{padding:9px 10px;border-radius:8px;font-size:13px;color:#5c5344}
+.m1 .sess.on{background:#fff;box-shadow:0 1px 3px rgba(60,40,10,.1);color:#2b2620;font-weight:700}
+.m1 .side .foot{margin-top:auto;font-size:11.5px;color:#8a7c62}
+.m1 .chat{display:flex;flex-direction:column;padding:26px 34px 20px;min-width:0}
+.m1 .agenthdr{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.m1 .ava{width:38px;height:38px;border-radius:50%;background:#c2571c;color:#fff;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;flex:none}
+.m1 .agenthdr b{font-family:'Fraunces',serif;font-size:16px}
+.m1 .agenthdr small{display:block;font-size:11.5px;color:#8a7c62}
+.m1 .msgs{flex:1;overflow:auto;display:flex;flex-direction:column;gap:14px;padding-right:6px}
+.m1 .b{max-width:78%;padding:12px 15px;border-radius:14px;font-size:14px;line-height:1.5}
+.m1 .b.mary{background:#fff;border:1px solid #e6dcc8;border-top-left-radius:4px}
+.m1 .b.user{background:#2b2620;color:#f2ecdf;align-self:flex-end;border-bottom-right-radius:4px}
+.m1 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.m1 .chip{background:#fbe8d8;border:1px solid #eab98b;color:#8a4413;font-size:12.5px;font-weight:700;padding:7px 12px;border-radius:99px}
+.m1 .input{margin-top:16px;background:#fff;border:1px solid #e0d5bf;border-radius:14px;padding:13px 16px;font-size:14px;color:#9a8d74;display:flex;justify-content:space-between;align-items:center}
+.m1 .send{width:30px;height:30px;border-radius:8px;background:#c2571c;color:#fff;display:grid;place-items:center;font-size:14px}
+.m1 .canvas{background:#fff;border-left:1px solid #e0d5bf;padding:22px;display:flex;flex-direction:column;min-width:0}
+.m1 .chdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.m1 .chdr b{font-family:'Fraunces',serif;font-size:14px}
+.m1 .exp{font-size:11px;font-weight:700;color:#c2571c;border:1.5px solid #c2571c;border-radius:8px;padding:5px 10px}
+.m1 .doc{flex:1;border:1px dashed #d8ccb2;border-radius:12px;padding:18px;overflow:auto;background:#fdfbf6}
+.m1 .doc h4{font-family:'Fraunces',serif;font-size:16px;margin-bottom:8px}
+.m1 .doc p,.m1 .doc li{font-size:12.5px;line-height:1.6;color:#5c5344}
+.m1 .doc .grow{margin-top:12px;height:9px;border-radius:6px;background:linear-gradient(90deg,#c2571c 60%,#eee1cb 60%)}
+.m1 .doc .sk{height:8px;border-radius:4px;background:#eee1cb;margin:8px 0}
+/* — phone — */
+body.ph .m1 .scene{display:flex;flex-direction:column}
+body.ph .m1 .side{display:none}
+body.ph .m1 .chat{padding:16px 16px 8px;flex:1;min-height:0}
+body.ph .m1 .b{max-width:88%}
+body.ph .m1 .canvas{border-left:none;border-top:1px solid #e0d5bf;padding:12px 16px;flex:none}
+body.ph .m1 .doc{display:none}
+body.ph .m1 .chdr{margin:0}
+body.ph .m1 .chdr b::after{content:" — building · tap to open";font-family:'Karla';font-weight:400;font-size:11px;color:#9a8d74}
+
+/* ============ 2 · CANVAS-FIRST ============ */
+.m2 .scene{background:#10151b;color:#dfe7ee;display:grid;grid-template-columns:400px 1fr;font-family:'Sora',sans-serif}
+.m2 .chat{border-right:1px solid #1f2933;display:flex;flex-direction:column;padding:22px;min-width:0}
+.m2 .hd{font-weight:800;font-size:15px;letter-spacing:.02em;margin-bottom:4px}
+.m2 .hd span{color:#5cc8ff}
+.m2 .sub{font-size:11px;color:#647585;margin-bottom:18px}
+.m2 .msgs{flex:1;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.m2 .b{font-size:13px;line-height:1.55;padding:11px 13px;border-radius:10px;max-width:92%}
+.m2 .b.mary{background:#182230;border:1px solid #243244}
+.m2 .b.user{background:#5cc8ff;color:#06222f;align-self:flex-end;font-weight:600}
+.m2 .b.sys{background:transparent;border:1px dashed #33475c;color:#7d93a8;font-size:11.5px;font-style:italic}
+.m2 .input{margin-top:14px;background:#182230;border:1px solid #243244;border-radius:10px;padding:12px 14px;font-size:13px;color:#647585}
+.m2 .stage{position:relative;padding:34px 44px;overflow:auto;background:
+  radial-gradient(circle at 20% 10%,rgba(92,200,255,.06),transparent 45%),
+  repeating-linear-gradient(0deg,transparent 0 27px,rgba(255,255,255,.025) 27px 28px),
+  repeating-linear-gradient(90deg,transparent 0 27px,rgba(255,255,255,.025) 27px 28px)}
+.m2 .sheet{background:#f5f7f4;color:#20242a;border-radius:6px;max-width:640px;margin:0 auto;padding:46px 52px;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+.m2 .sheet h2{font-family:'Fraunces',serif;font-weight:900;font-size:26px;margin-bottom:4px}
+.m2 .sheet .meta{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#7d8894;margin-bottom:20px}
+.m2 .sheet h3{font-family:'Fraunces',serif;font-size:15px;margin:18px 0 6px}
+.m2 .sheet p,.m2 .sheet li{font-size:13px;line-height:1.65;color:#454c55}
+.m2 .cursorline{background:#dff1ff;outline:2px solid #5cc8ff;border-radius:3px;padding:2px 4px}
+.m2 .float{position:absolute;top:26px;right:36px;display:flex;gap:8px}
+.m2 .fbtn{background:#182230;border:1px solid #33475c;color:#bcd2e2;font-size:11.5px;font-weight:600;border-radius:8px;padding:8px 13px}
+.m2 .fbtn.hot{background:#5cc8ff;color:#06222f;border-color:#5cc8ff}
+/* — phone: sheet on top (hero), chat docked below — */
+body.ph .m2 .scene{display:flex;flex-direction:column}
+body.ph .m2 .stage{order:1;flex:1.25;padding:18px 14px;min-height:0}
+body.ph .m2 .chat{order:2;flex:1;border-right:none;border-top:1px solid #1f2933;padding:14px;min-height:0}
+body.ph .m2 .sheet{padding:22px 22px}
+body.ph .m2 .sheet h2{font-size:19px}
+body.ph .m2 .float{top:10px;right:10px}
+body.ph .m2 .fbtn{display:none}
+body.ph .m2 .fbtn.hot{display:block}
+body.ph .m2 .hd,body.ph .m2 .sub{display:none}
+
+/* ============ 3 · TECHNIQUE DECK ============ */
+.m3 .scene{background:#20603c;color:#f7f3e8;font-family:'Nunito',sans-serif;padding:36px 44px;overflow:auto;
+  background-image:radial-gradient(circle at 50% -20%,#2c7a4e,#20603c 60%)}
+.m3 h1{font-family:'Caprasimo',cursive;font-size:40px;text-align:center;text-shadow:0 4px 0 rgba(0,0,0,.25)}
+.m3 .tag2{text-align:center;font-size:14px;color:#cfe6c9;margin:6px 0 30px}
+.m3 .table{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;max-width:1020px;margin:0 auto}
+.m3 .card{background:#fdf8ec;color:#2e2a20;border-radius:16px;padding:20px 18px 16px;min-height:190px;position:relative;box-shadow:0 10px 0 #17452b,0 16px 30px rgba(0,0,0,.35);transform:rotate(var(--r,0deg));transition:transform .2s}
+.m3 .card:hover{transform:rotate(0deg) translateY(-8px)}
+.m3 .card .suit{font-family:'Caprasimo';font-size:22px;color:#c2571c}
+.m3 .card h3{font-family:'Caprasimo';font-size:18px;margin:8px 0 6px}
+.m3 .card p{font-size:12.5px;line-height:1.5;color:#5a5244}
+.m3 .card .cat{position:absolute;top:14px;right:14px;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#9a8d74}
+.m3 .card.wild{background:#2e2a20;color:#fdf8ec}
+.m3 .card.wild p{color:#b9ae98}
+.m3 .card.wild .suit{color:#ffb347}
+.m3 .dealbar{max-width:1020px;margin:26px auto 0;display:flex;gap:12px;justify-content:center}
+.m3 .deal{background:#ffb347;color:#4a2c00;font-weight:900;font-size:15px;border-radius:14px;padding:13px 26px;box-shadow:0 6px 0 #b87b1e}
+.m3 .deal.ghost{background:transparent;color:#f7f3e8;border:2px dashed #7fae8f;box-shadow:none}
+/* — phone: 2-col mini cards, sticky deal bar — */
+body.ph .m3 .scene{padding:22px 16px 90px}
+body.ph .m3 h1{font-size:25px}
+body.ph .m3 .tag2{font-size:12px;margin-bottom:18px}
+body.ph .m3 .table{grid-template-columns:1fr 1fr;gap:12px}
+body.ph .m3 .card{min-height:138px;padding:14px 12px 12px}
+body.ph .m3 .card h3{font-size:14.5px}
+body.ph .m3 .card p{font-size:10.5px}
+body.ph .m3 .card .cat{display:none}
+body.ph .m3 .dealbar{position:absolute;left:12px;right:12px;bottom:14px;margin:0}
+body.ph .m3 .deal{flex:1;text-align:center;font-size:13px;padding:12px 8px}
+
+/* ============ 4 · THE NOTEBOOK ============ */
+.m4 .scene{background:#e9e2d0;font-family:'Zilla Slab',serif;color:#33302a;display:grid;grid-template-columns:1fr 330px}
+.m4 .page{margin:26px 0 26px 40px;background:#fbf7ec;border-radius:4px 14px 14px 4px;box-shadow:0 18px 40px rgba(90,70,30,.25);position:relative;overflow:auto;padding:40px 46px 40px 78px;
+  background-image:repeating-linear-gradient(0deg,transparent 0 31px,#e3d9c2 31px 32px)}
+.m4 .page::before{content:"";position:absolute;top:0;bottom:0;left:56px;width:2px;background:#e0938c}
+.m4 .page h2{font-family:'Instrument Serif',serif;font-size:30px;line-height:32px}
+.m4 .page .date{font-family:'Caveat',cursive;font-size:19px;color:#a0522d;line-height:32px}
+.m4 .page p{font-size:15px;line-height:32px}
+.m4 .hl{background:linear-gradient(180deg,transparent 55%,#ffe28a 55% 92%,transparent 92%)}
+.m4 .scribble{font-family:'Caveat',cursive;font-size:20px;color:#1e6091;line-height:32px}
+.m4 .margin{padding:26px 22px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.m4 .note{background:#fff;border-radius:10px;padding:13px 15px;box-shadow:0 3px 10px rgba(90,70,30,.15);font-size:13.5px;line-height:1.5}
+.m4 .note.mary{border-left:4px solid #a0522d}
+.m4 .note.mary b{font-family:'Caveat',cursive;font-size:17px;color:#a0522d}
+.m4 .note.user{background:#fdf0c2;transform:rotate(-1.2deg);font-family:'Kalam',cursive}
+.m4 .ask{margin-top:auto;background:#fff;border:2px solid #d8ccb0;border-radius:12px;padding:12px 14px;font-family:'Kalam',cursive;font-size:14px;color:#9a8d74}
+/* — phone: page hero, margin notes become bottom strip — */
+body.ph .m4 .scene{display:flex;flex-direction:column}
+body.ph .m4 .page{flex:1;margin:14px 12px 6px;padding:22px 18px 22px 52px;min-height:0}
+body.ph .m4 .page::before{left:38px}
+body.ph .m4 .page h2{font-size:22px}
+body.ph .m4 .page p{font-size:13px;line-height:26px}
+body.ph .m4 .page{background-image:repeating-linear-gradient(0deg,transparent 0 25px,#e3d9c2 25px 26px)}
+body.ph .m4 .scribble{font-size:17px;line-height:26px}
+body.ph .m4 .margin{flex:none;flex-direction:row;overflow-x:auto;padding:10px 12px 14px;gap:10px}
+body.ph .m4 .note{min-width:210px;font-size:12px}
+body.ph .m4 .ask{margin:0;min-width:150px}
+
+/* ============ 5 · THE IDEA WALL ============ */
+.m5 .scene{background:#3b3a42;font-family:'Kalam',cursive;position:relative;
+  background-image:radial-gradient(circle at 30% 20%,#46454f,#3b3a42 70%)}
+.m5 .corkhdr{display:flex;justify-content:space-between;align-items:center;padding:20px 30px;color:#e8e4da;font-family:'Sora',sans-serif}
+.m5 .corkhdr b{font-size:17px;font-weight:800}
+.m5 .lens{background:#ffd23f;color:#4a3800;border-radius:99px;padding:6px 16px;font-weight:700;font-size:13px;font-family:'Kalam'}
+.m5 .wall{position:absolute;inset:70px 0 92px 0;padding:10px 30px}
+.m5 .sticky{position:absolute;width:180px;min-height:120px;padding:16px 14px;font-size:15px;line-height:1.35;color:#3a3320;box-shadow:0 8px 18px rgba(0,0,0,.35);transform:rotate(var(--r));border-radius:2px}
+.m5 .sticky small{display:block;margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#00000070;letter-spacing:.06em}
+.m5 .y{background:#ffe066}.m5 .p{background:#ffb3c1}.m5 .g{background:#b9e8a5}.m5 .bl{background:#a5d8ff}.m5 .o{background:#ffc078}
+.m5 .cluster{position:absolute;border:2px dashed #ffffff55;border-radius:18px;padding:6px 12px;color:#ffffffa8;font-family:'Sora';font-size:11px;letter-spacing:.05em}
+.m5 .chatdock{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(720px,92%);background:#26252c;border:1px solid #4b4a55;border-radius:16px;padding:12px 16px;display:flex;align-items:center;gap:12px;font-family:'Sora'}
+.m5 .mave{width:34px;height:34px;border-radius:50%;background:#ffd23f;color:#4a3800;display:grid;place-items:center;font-weight:900;font-family:'Fraunces',serif;flex:none}
+.m5 .say{flex:1;color:#cfccc2;font-size:13px}
+.m5 .say b{color:#ffd23f}
+.m5 .chatdock input{background:#1b1a20;border:1px solid #4b4a55;border-radius:9px;color:#e8e4da;padding:9px 12px;font-size:13px;width:220px}
+/* — phone: wall scaled to half, dock stacks — */
+body.ph .m5 .corkhdr{padding:14px 16px;flex-wrap:wrap;gap:8px}
+body.ph .m5 .corkhdr b{font-size:14px}
+body.ph .m5 .corkhdr>span:last-child{display:none}
+body.ph .m5 .wall{inset:58px 0 128px 0;transform:scale(.42);transform-origin:top left;width:238%;height:238%}
+body.ph .m5 .chatdock{flex-wrap:wrap;bottom:10px;padding:10px 12px}
+body.ph .m5 .say{font-size:11.5px;flex:1 1 100%;order:2}
+body.ph .m5 .chatdock input{flex:1;width:auto;order:3}
+body.ph .m5 .mave{order:1}
+
+/* ============ 6 · ZEN FOCUS ============ */
+.m6 .scene{background:#faf9f5;color:#1c1b18;font-family:'Instrument Serif',serif;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;position:relative}
+.m6 .breath{position:absolute;top:34px;left:50%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.35em;color:#b0aca0;text-transform:uppercase;white-space:nowrap}
+.m6 .q{font-size:44px;line-height:1.25;max-width:760px;font-style:italic}
+.m6 .q b{font-style:normal;border-bottom:3px solid #d3b98a}
+.m6 .ctx{font-family:'Karla',sans-serif;font-size:13px;color:#8b877a;margin-top:22px}
+.m6 .answer{margin-top:44px;width:min(620px,90%);border:none;border-bottom:1.5px solid #d6d2c4;background:transparent;font-family:'Instrument Serif';font-size:21px;padding:10px 4px;color:#5c584c;font-style:italic;text-align:center}
+.m6 .dotsrow{position:absolute;bottom:104px;display:flex;gap:10px}
+.m6 .dotsrow i{width:7px;height:7px;border-radius:50%;background:#ddd8c8}
+.m6 .dotsrow i.done{background:#d3b98a}
+.m6 .dotsrow i.now{background:#1c1b18;transform:scale(1.35)}
+.m6 .peek{position:absolute;right:26px;bottom:96px;font-family:'Karla';font-size:12px;color:#8b877a;border:1px solid #ddd8c8;padding:8px 14px;border-radius:99px}
+/* — phone — */
+body.ph .m6 .scene{padding:28px 22px}
+body.ph .m6 .q{font-size:27px}
+body.ph .m6 .answer{font-size:17px;margin-top:30px}
+body.ph .m6 .peek{right:50%;transform:translateX(50%);bottom:58px}
+body.ph .m6 .dotsrow{bottom:118px}
+
+/* ============ 7 · MISSION CONTROL ============ */
+.m7 .scene{background:#101418;color:#c9d6cf;font-family:'IBM Plex Mono',monospace;display:grid;grid-template-columns:1fr 300px;grid-template-rows:52px 1fr 30px}
+.m7 .top{grid-column:1/3;display:flex;align-items:center;gap:18px;padding:0 20px;border-bottom:1px solid #1f2a26;background:#0c1013}
+.m7 .sig{color:#7ee2a8;font-weight:600;font-size:13px;white-space:nowrap}
+.m7 .sessl{font-size:11px;color:#5d6f66}
+.m7 .meter{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:#8fa39a;white-space:nowrap}
+.m7 .meter .bar{width:130px;height:8px;border-radius:4px;background:#1c2622;overflow:hidden}
+.m7 .meter .bar i{display:block;height:100%;width:31%;background:linear-gradient(90deg,#7ee2a8,#e2d67e)}
+.m7 .main{padding:20px 24px;overflow:auto;display:flex;flex-direction:column;gap:12px;min-width:0}
+.m7 .line{font-size:13px;line-height:1.6;max-width:88%}
+.m7 .line .who{color:#7ee2a8;font-weight:600}
+.m7 .line.user{align-self:flex-end;text-align:right}
+.m7 .line.user .who{color:#e2a87e}
+.m7 .line.honest{border:1px solid #4d5c37;background:#1a2114;border-radius:6px;padding:10px 13px;color:#cdd9a3;font-size:12px}
+.m7 .line.honest b{color:#e2d67e}
+.m7 .promptx{margin-top:auto;border:1px solid #2a3a33;background:#0c1013;border-radius:6px;padding:12px 14px;font-size:13px;color:#5d6f66}
+.m7 .promptx::before{content:"❯ ";color:#7ee2a8}
+.m7 .rail{border-left:1px solid #1f2a26;background:#0c1013;padding:16px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.m7 .panel{border:1px solid #1f2a26;border-radius:8px;padding:12px}
+.m7 .panel h5{font-size:10px;letter-spacing:.15em;color:#5d6f66;text-transform:uppercase;margin-bottom:9px}
+.m7 .memline{font-size:10.5px;color:#8fa39a;line-height:1.7;border-left:2px solid #23332c;padding-left:8px;margin-bottom:5px}
+.m7 .memline b{color:#7ee2a8}
+.m7 .gap{font-size:11px;color:#cdd9a3;background:#1a2114;border-radius:5px;padding:7px 9px;margin-bottom:6px;line-height:1.5}
+.m7 .outbox{background:#e2d67e;color:#2a2508;text-align:center;font-weight:600;font-size:11.5px;border-radius:6px;padding:9px}
+.m7 .statusb{grid-column:1/3;background:#0c1013;border-top:1px solid #1f2a26;font-size:10px;color:#4d5c56;display:flex;align-items:center;gap:22px;padding:0 20px;overflow:hidden;white-space:nowrap}
+/* — phone: single column, rail collapses to a swipeable strip — */
+body.ph .m7 .scene{grid-template-columns:1fr;grid-template-rows:48px 1fr auto 26px}
+body.ph .m7 .top{grid-column:1;padding:0 14px;gap:10px}
+body.ph .m7 .sessl{display:none}
+body.ph .m7 .meter .bar{width:70px}
+body.ph .m7 .main{padding:14px;grid-row:2}
+body.ph .m7 .rail{grid-column:1;grid-row:3;border-left:none;border-top:1px solid #1f2a26;flex-direction:row;padding:10px 12px;gap:10px;overflow-x:auto}
+body.ph .m7 .panel{min-width:230px;flex:none}
+body.ph .m7 .panel .memline:nth-child(n+4){display:none}
+body.ph .m7 .statusb{grid-column:1;grid-row:4;gap:12px;padding:0 14px}
+body.ph .m7 .statusb span:nth-child(n+3){display:none}
+
+/* ============ 8 · THE STUDIO ============ */
+.m8 .scene{background:#141210;color:#efe9df;display:grid;grid-template-columns:1fr 1fr;font-family:'Karla',sans-serif}
+.m8 .left{padding:44px 48px;display:flex;flex-direction:column;border-right:1px solid #2a251f;min-width:0}
+.m8 .kicker{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.3em;color:#b08d57;text-transform:uppercase}
+.m8 h1{font-family:'Fraunces',serif;font-weight:900;font-size:52px;line-height:1.02;margin:14px 0 8px;letter-spacing:-.01em}
+.m8 h1 em{font-style:italic;color:#b08d57;font-weight:400}
+.m8 .msgs{margin-top:26px;flex:1;overflow:auto;display:flex;flex-direction:column;gap:16px;padding-right:10px}
+.m8 .b{font-size:14px;line-height:1.6;max-width:85%}
+.m8 .b .lbl{font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.2em;color:#b08d57;text-transform:uppercase;display:block;margin-bottom:5px}
+.m8 .b.user{align-self:flex-end;text-align:right;color:#cfc6b8;border-right:2px solid #b08d57;padding-right:14px}
+.m8 .inputx{border-top:1px solid #2a251f;padding-top:16px;margin-top:14px;font-size:14px;color:#7d745f;font-style:italic}
+.m8 .right{background:#f2ede3;color:#1d1a15;overflow:auto;padding:40px 48px;position:relative}
+.m8 .right::before{content:"LIVE PROOF";position:absolute;top:16px;right:18px;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.25em;color:#b08d57}
+.m8 .right h2{font-family:'Fraunces',serif;font-weight:900;font-size:34px;line-height:1.08;margin-bottom:6px}
+.m8 .dek{font-family:'Instrument Serif',serif;font-style:italic;font-size:17px;color:#6e6553;margin-bottom:22px}
+.m8 .cols{column-count:2;column-gap:26px;font-size:12.5px;line-height:1.7;color:#3c362b}
+.m8 .cols p{margin-bottom:12px}
+.m8 .pull{font-family:'Fraunces',serif;font-size:19px;line-height:1.35;border-top:2px solid #1d1a15;border-bottom:2px solid #1d1a15;padding:12px 0;margin:8px 0 14px;break-inside:avoid}
+/* — phone: stacked, chat on top, page below — */
+body.ph .m8 .scene{display:flex;flex-direction:column}
+body.ph .m8 .left{padding:20px;border-right:none;flex:1;min-height:0}
+body.ph .m8 h1{font-size:29px}
+body.ph .m8 .msgs{margin-top:14px}
+body.ph .m8 .right{flex:1;padding:22px 20px}
+body.ph .m8 .right h2{font-size:23px}
+body.ph .m8 .cols{column-count:1}
+
+/* ============ 9 · THE JOURNEY ============ */
+.m9 .scene{background:#eef2f7;color:#22303f;font-family:'Sora',sans-serif;display:flex;flex-direction:column}
+.m9 .railtop{background:#fff;border-bottom:1px solid #dbe4ee;padding:22px 40px 18px}
+.m9 .steps{display:flex;align-items:center;max-width:900px;margin:0 auto}
+.m9 .step{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:600;color:#93a5b8;white-space:nowrap}
+.m9 .step .n{width:30px;height:30px;border-radius:50%;border:2px solid #cfdbe8;display:grid;place-items:center;font-size:12px;background:#fff;flex:none}
+.m9 .step.done .n{background:#22303f;border-color:#22303f;color:#fff}
+.m9 .step.done{color:#22303f}
+.m9 .step.now .n{border-color:#e8590c;color:#e8590c;box-shadow:0 0 0 5px #e8590c22}
+.m9 .step.now{color:#e8590c}
+.m9 .conn{flex:1;height:2px;background:#cfdbe8;margin:0 12px}
+.m9 .conn.done{background:#22303f}
+.m9 .body{flex:1;display:grid;grid-template-columns:1fr 380px;gap:26px;padding:28px 40px;max-width:1160px;margin:0 auto;width:100%;min-height:0}
+.m9 .stagecard{background:#fff;border-radius:18px;box-shadow:0 10px 30px rgba(34,48,63,.08);padding:28px 32px;display:flex;flex-direction:column;overflow:auto}
+.m9 .phase{font-size:11px;font-weight:800;letter-spacing:.12em;color:#e8590c;text-transform:uppercase}
+.m9 .stagecard h2{font-size:23px;font-weight:800;margin:8px 0 6px}
+.m9 .desc{font-size:13.5px;color:#5c7086;line-height:1.6;margin-bottom:18px}
+.m9 .b{font-size:13.5px;line-height:1.55;padding:12px 15px;border-radius:12px;margin-bottom:10px;max-width:85%}
+.m9 .b.mary{background:#eef2f7}
+.m9 .b.user{background:#22303f;color:#fff;margin-left:auto}
+.m9 .sidecard{background:#fff;border-radius:18px;box-shadow:0 10px 30px rgba(34,48,63,.08);padding:22px;overflow:auto}
+.m9 .sidecard h4{font-size:13px;font-weight:800;margin-bottom:12px}
+.m9 .harvest{border:1px solid #e3ebf3;border-left:4px solid #e8590c;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.5;color:#41546a;margin-bottom:9px}
+.m9 .count{font-size:11px;color:#93a5b8;text-align:right}
+/* — phone: dots-only rail, harvest as horizontal strip — */
+body.ph .m9 .railtop{padding:14px 14px 12px}
+body.ph .m9 .step{font-size:0;gap:0}
+body.ph .m9 .step .n{font-size:12px;width:28px;height:28px}
+body.ph .m9 .conn{margin:0 6px}
+body.ph .m9 .body{display:flex;flex-direction:column;gap:12px;padding:12px}
+body.ph .m9 .stagecard{padding:18px;flex:1;min-height:0}
+body.ph .m9 .stagecard h2{font-size:18px}
+body.ph .m9 .sidecard{flex:none;padding:14px;display:flex;gap:9px;overflow-x:auto;align-items:center}
+body.ph .m9 .sidecard h4{font-size:11px;min-width:70px;margin:0}
+body.ph .m9 .harvest{min-width:180px;margin:0;flex:none}
+body.ph .m9 .count{display:none}
+
+/* ============ 10 · THE MESSENGER ============ */
+.m10 .scene{background:#dfe6ef;display:grid;place-items:center;font-family:'Nunito',sans-serif;
+  background-image:radial-gradient(circle at 70% 20%,#e9eef6,#d5deeb)}
+.m10 .phone{width:392px;height:calc(100% - 56px);max-height:820px;background:#fff;border-radius:38px;box-shadow:0 30px 70px rgba(30,40,70,.35);display:flex;flex-direction:column;overflow:hidden;border:9px solid #1b1f27}
+.m10 .phd{background:linear-gradient(135deg,#845ef7,#5c7cfa);color:#fff;padding:18px 18px 14px;display:flex;align-items:center;gap:11px}
+.m10 .av{width:40px;height:40px;border-radius:50%;background:#fff;color:#5c7cfa;display:grid;place-items:center;font-weight:900;font-family:'Fraunces',serif;font-size:17px;flex:none}
+.m10 .phd b{font-size:15px}
+.m10 .phd small{display:block;font-size:11px;opacity:.85}
+.m10 .thread{flex:1;overflow:auto;padding:16px 14px;display:flex;flex-direction:column;gap:10px;background:#f6f8fc}
+.m10 .b{max-width:80%;padding:10px 14px;border-radius:18px;font-size:13.5px;line-height:1.45}
+.m10 .b.mary{background:#fff;box-shadow:0 1px 3px rgba(30,40,70,.12);border-bottom-left-radius:5px}
+.m10 .b.user{background:linear-gradient(135deg,#845ef7,#5c7cfa);color:#fff;align-self:flex-end;border-bottom-right-radius:5px}
+.m10 .chips{display:flex;gap:7px;flex-wrap:wrap}
+.m10 .chip{background:#eef0ff;border:1.5px solid #bac4ff;color:#4c56c0;font-size:12px;font-weight:800;padding:7px 12px;border-radius:99px}
+.m10 .doccard{background:#fff;border-radius:16px;box-shadow:0 2px 8px rgba(30,40,70,.14);padding:13px 15px;max-width:82%}
+.m10 .dt{display:flex;gap:10px;align-items:center}
+.m10 .ic{width:38px;height:38px;border-radius:10px;background:#eef0ff;display:grid;place-items:center;font-size:17px;flex:none}
+.m10 .doccard b{font-size:13px}
+.m10 .doccard small{font-size:11px;color:#8b95a8;display:block}
+.m10 .acts{display:flex;gap:8px;margin-top:10px}
+.m10 .acts span{flex:1;text-align:center;font-size:11.5px;font-weight:800;color:#4c56c0;background:#eef0ff;border-radius:8px;padding:7px 0}
+.m10 .inputrow{padding:10px 12px 14px;background:#fff;display:flex;gap:9px;align-items:center;border-top:1px solid #edf0f6}
+.m10 .field{flex:1;background:#f1f3f9;border-radius:99px;padding:11px 16px;font-size:13px;color:#9aa4b8}
+.m10 .mic{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#845ef7,#5c7cfa);color:#fff;display:grid;place-items:center;flex:none}
+/* — phone: the messenger IS the phone — fill the frame — */
+body.ph .m10 .scene{display:block;background:#fff}
+body.ph .m10 .phone{width:100%;height:100%;max-height:none;border:none;border-radius:0;box-shadow:none}
+</style>
+</head>
+<body>
+
+<!-- ================= 1 · THE COMPANION ================= -->
+<section class="mock m1 active" data-title="1 · The Companion" data-concept="Maximum familiarity: ChatGPT's exact mental model + a canvas pane. Lowest learning curve, least differentiated at first glance.">
+<div class="scene">
+  <div class="side">
+    <div class="logo">play<em>ground</em></div>
+    <div class="newbtn">＋ New session</div>
+    <div class="sess on">🎨 Rebrand idea for Loomcraft</div>
+    <div class="sess">✈️ Q3 travel-client pitch</div>
+    <div class="sess">🧵 Newsletter concept</div>
+    <div class="foot">Every session becomes a document.<br>Nothing gets lost in the scroll.</div>
+  </div>
+  <div class="chat">
+    <div class="agenthdr"><div class="ava">M</div><div><b>Mary</b> · Business Analyst<small>Running: Job to Be Done</small></div></div>
+    <div class="msgs">
+      <div class="b mary">Welcome back! You said the rebrand feels "off." Let's not fix the logo yet — what is the client really <b>hiring</b> this rebrand to do?</div>
+      <div class="b user">Honestly? I think they want to charge more without losing their old customers.</div>
+      <div class="b mary">There it is — that's a <i>pricing-power</i> job, not a design job. 🎯 I've added it to your document. Want to pressure-test it, or keep digging?</div>
+      <div class="chips"><span class="chip">Pressure-test it</span><span class="chip">Keep digging</span><span class="chip">Switch technique</span></div>
+    </div>
+    <div class="input">Tell Mary what you're thinking… <span class="send">↑</span></div>
+  </div>
+  <div class="canvas">
+    <div class="chdr"><b>📄 Your document</b><span class="exp">Export ▾</span></div>
+    <div class="doc">
+      <h4>Loomcraft Rebrand — Real Job</h4>
+      <p><b>Hypothesis:</b> the rebrand is hired to justify premium pricing to existing customers.</p>
+      <div class="sk"></div><div class="sk" style="width:80%"></div>
+      <h4 style="margin-top:14px">Evidence so far</h4>
+      <li>Old customers = 70% revenue</li>
+      <li>"Feels off" = fear of alienation</li>
+      <div class="grow"></div>
+      <p style="margin-top:8px;font-size:11px;color:#9a8d74">Building live as you talk…</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ================= 2 · CANVAS-FIRST ================= -->
+<section class="mock m2" data-title="2 · Canvas-First" data-concept="The document is the hero; chat is the tool that shapes it. Strongest 'I made a thing' payoff — riskier for chat-first habits.">
+<div class="scene">
+  <div class="chat">
+    <div class="hd">PLAYGROUND <span>/ shaping</span></div>
+    <div class="sub">Mary · Constraint Mapping · autosaved 2s ago</div>
+    <div class="msgs">
+      <div class="b mary">I've drafted the constraints section from what you said. The one I underlined in the sheet — "no budget until April" — is that <b>real</b>, or assumed?</div>
+      <div class="b user">Assumed, actually. There's a discretionary pot.</div>
+      <div class="b sys">✎ Rewriting §2 — moving "budget" from Real → Imagined…</div>
+      <div class="b mary">Done — watch the sheet. That unlocks two options we'd killed earlier. Should I resurrect them?</div>
+    </div>
+    <div class="input">Reply, or tap any line in the sheet to discuss it…</div>
+  </div>
+  <div class="stage">
+    <div class="float"><span class="fbtn">History</span><span class="fbtn">PDF</span><span class="fbtn hot">Send to client</span></div>
+    <div class="sheet">
+      <h2>Workshop Offer — Constraints</h2>
+      <div class="meta">DRAFT 3 · SHAPED WITH MARY · 14 JUL 2026</div>
+      <h3>1. Real constraints</h3>
+      <p>Two facilitators max. Venue booked only through May.</p>
+      <h3>2. Imagined constraints</h3>
+      <p><span class="cursorline">Budget freeze until April — reclassified: discretionary pot exists.</span></p>
+      <h3>3. Constraints turned into assets</h3>
+      <p>Small venue → "intimate cohort" positioning; scarcity becomes the pitch.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ================= 3 · TECHNIQUE DECK ================= -->
+<section class="mock m3" data-title="3 · Technique Deck" data-concept="Techniques as a deal of playing cards — play over homework. Best blank-page killer; needs a strong transition into the chat.">
+<div class="scene">
+  <h1>Pick your card, Vee</h1>
+  <div class="tag2">Each card is a different way to think. Mary deals, you play.</div>
+  <div class="table">
+    <div class="card" style="--r:-2deg"><div class="suit">♠</div><span class="cat">structured</span><h3>Job to Be Done</h3><p>What is this idea really being hired to do? Chase the job, not the feature.</p></div>
+    <div class="card" style="--r:1.5deg"><div class="suit">♥</div><span class="cat">deep</span><h3>Five Whys</h3><p>Ask why, five times in a chain, until the root cause surfaces.</p></div>
+    <div class="card wild" style="--r:-1deg"><div class="suit">★</div><span class="cat">wild</span><h3>Chaos Engineering</h3><p>Break your idea every way it could fail. Keep only what survives.</p></div>
+    <div class="card" style="--r:2deg"><div class="suit">♦</div><span class="cat">structured</span><h3>How Might We</h3><p>Reframe the problem as opportunity questions, then attack the sharpest one.</p></div>
+    <div class="card" style="--r:1deg"><div class="suit">♣</div><span class="cat">creative</span><h3>Cross-Pollination</h3><p>How would a casino, an ER, a beekeeper crack this? Steal their move.</p></div>
+    <div class="card" style="--r:-1.6deg"><div class="suit">♥</div><span class="cat">constraint</span><h3>The $0 Mandate</h3><p>Achieve the goal spending nothing. Only people, favors, what you own.</p></div>
+    <div class="card wild" style="--r:2.2deg"><div class="suit">★</div><span class="cat">absurdist</span><h3>Cursed Genie</h3><p>Your wish granted in the worst technically-correct way. Patch the loopholes.</p></div>
+    <div class="card" style="--r:-0.8deg"><div class="suit">♠</div><span class="cat">structured</span><h3>Empathy Map</h3><p>Says, thinks, does, feels — mine each quadrant for the unmet need.</p></div>
+  </div>
+  <div class="dealbar"><span class="deal">🎲 Deal me 3 at random</span><span class="deal ghost">Let Mary choose for my goal</span></div>
+</div>
+</section>
+
+<!-- ================= 4 · THE NOTEBOOK ================= -->
+<section class="mock m4" data-title="4 · The Notebook" data-concept="A living journal: your thinking on ruled paper, Mary in the margins. Warmest 'this is MINE' feeling; least chat-like.">
+<div class="scene">
+  <div class="page">
+    <h2>Workshop idea <span class="date">— Tue, 14 July</span></h2>
+    <p>&nbsp;</p>
+    <p>Started with: <span class="hl">"I want to run paid strategy workshops but I don't know what makes mine different."</span></p>
+    <p class="scribble">→ Mary asked: different from WHAT? List the alternatives my client actually considers…</p>
+    <p>1. Hiring a big agency (too expensive, slow)</p>
+    <p>2. DIY with ChatGPT (cheap, generic, no accountability)</p>
+    <p>3. Doing nothing (the real competitor!)</p>
+    <p>&nbsp;</p>
+    <p><span class="hl">The workshop isn't competing with agencies. It's competing with "doing nothing."</span></p>
+    <p class="scribble">✓ pinned as key insight — this changes the whole pitch</p>
+  </div>
+  <div class="margin">
+    <div class="note mary"><b>Mary</b><br>That third alternative you almost skipped — "doing nothing" — is doing a lot of work. What makes a client finally stop doing nothing?</div>
+    <div class="note user">usually a scare — they lose a deal or a competitor launches something</div>
+    <div class="note mary"><b>Mary</b><br>So the trigger is fear, not ambition. Should the workshop be positioned as a response to that moment? I'll sketch that in the notebook if you want.</div>
+    <div class="ask">write in the margin…</div>
+  </div>
+</div>
+</section>
+
+<!-- ================= 5 · THE IDEA WALL ================= -->
+<section class="mock m5" data-title="5 · The Idea Wall" data-concept="Every idea becomes a sticky on a shared wall; Mary clusters live. Great for volume + converge phase; text-heavy sessions get crowded.">
+<div class="scene">
+  <div class="corkhdr"><b>🧱 The Wall — "Newsletter concept"</b><span class="lens">Lens: Worst Possible Idea</span><span style="font-size:12px;color:#9a97a8">23 ideas · 3 clusters</span></div>
+  <div class="wall">
+    <div class="cluster" style="top:30px;left:40px;width:420px;height:250px">CLUSTER · what readers actually skim</div>
+    <div class="sticky y" style="top:70px;left:70px;--r:-3deg">Send it only when something actually happened<small>YOU · 14:02</small></div>
+    <div class="sticky y" style="top:90px;left:265px;--r:2deg">One idea per issue. One. Not five.<small>YOU · 14:04</small></div>
+    <div class="sticky g" style="top:170px;left:150px;--r:-1deg">Subject line = the takeaway itself<small>MARY · 14:05</small></div>
+    <div class="cluster" style="top:40px;right:60px;width:380px;height:260px">CLUSTER · worst possible ideas 💀</div>
+    <div class="sticky p" style="top:85px;right:280px;--r:3deg">Daily 4,000-word essays with no headings<small>YOU · 14:11</small></div>
+    <div class="sticky p" style="top:110px;right:90px;--r:-2deg">Auto-generated AI slop with zero opinion<small>YOU · 14:12</small></div>
+    <div class="sticky o" style="top:200px;right:180px;--r:1.5deg">↳ flip: strong opinion IS the product<small>MARY · 14:13</small></div>
+    <div class="sticky bl" style="bottom:40px;left:340px;--r:-2deg">Charge for the archive, not the letter?<small>YOU · 14:18</small></div>
+    <div class="sticky y" style="bottom:70px;left:90px;--r:2deg">Reader replies become next issue's material<small>YOU · 14:16</small></div>
+  </div>
+  <div class="chatdock">
+    <div class="mave">M</div>
+    <div class="say"><b>Mary:</b> That pink cluster is gold — every "worst idea" flips into a rule. Want me to draft "The 5 Rules" as your document from it?</div>
+    <input placeholder="add an idea or answer…">
+  </div>
+</div>
+</section>
+
+<!-- ================= 6 · ZEN FOCUS ================= -->
+<section class="mock m6" data-title="6 · Zen Focus" data-concept="One question at a time, nothing else on screen. Deepest thinking per minute; hides the toolbox and the canvas until the reveal.">
+<div class="scene">
+  <div class="breath">Five Whys · 3 of 5</div>
+  <div class="q">Why do you think clients <b>stop replying</b> after the first proposal?</div>
+  <div class="ctx">You said: "they love the call, then vanish." Mary is listening.</div>
+  <input class="answer" placeholder="say it plainly — no one is judging the wording">
+  <div class="dotsrow"><i class="done"></i><i class="done"></i><i class="now"></i><i></i><i></i></div>
+  <div class="peek">📄 peek at your document (2 insights so far)</div>
+</div>
+</section>
+
+<!-- ================= 7 · MISSION CONTROL ================= -->
+<section class="mock m7" data-title="7 · Mission Control" data-concept="Honest machinery on display: memlog ticker, budget meter, gap outbox. Teaches 'AI isn't magic' by design — most likely to intimidate.">
+<div class="scene">
+  <div class="top"><span class="sig">● MARY ONLINE</span><span class="sessl">session #7 · brainstorm · "pricing page"</span>
+    <div class="meter">API budget <div class="bar"><i></i></div> $3.10 / $10</div>
+  </div>
+  <div class="main">
+    <div class="line"><span class="who">mary</span> · Technique switch → <b>Assumption Reversal</b>. You listed "clients compare us on price." Flip it: what if they never compare price at all — what are they comparing?</div>
+    <div class="line user"><span class="who">you</span> · risk, probably. who's least likely to embarrass them.</div>
+    <div class="line"><span class="who">mary</span> · Logged as insight #9. That reframes your pricing page as a <b>reassurance page</b>. Want the harvest so far as a document?</div>
+    <div class="line honest">⚠ <b>capability gap</b> — you asked me to pull your Stripe data. I can't reach external accounts in this environment. Noted to the builder's outbox (with your consent) — for now, paste the numbers and I'll work with them.</div>
+    <div class="promptx">type your reply…</div>
+  </div>
+  <div class="rail">
+    <div class="panel"><h5>Memlog · live</h5>
+      <div class="memline"><b>idea</b> risk &gt; price as the real comparison</div>
+      <div class="memline"><b>insight</b> pricing page = reassurance page</div>
+      <div class="memline"><b>technique</b> started Assumption Reversal</div>
+      <div class="memline"><b>decision</b> park the discount-tier idea</div>
+    </div>
+    <div class="panel"><h5>Gap outbox · 2 pending</h5>
+      <div class="gap">Stripe / revenue data access</div>
+      <div class="gap">PDF export with brand fonts</div>
+      <div class="outbox">Review & send to builder →</div>
+    </div>
+  </div>
+  <div class="statusb"><span>memlog: 31 entries</span><span>autosave ✓</span><span>model: opus</span><span>honesty mode: always on</span></div>
+</div>
+</section>
+
+<!-- ================= 8 · THE STUDIO ================= -->
+<section class="mock m8" data-title="8 · The Studio" data-concept="Editorial gravitas: the session as a magazine feature being typeset live. Most 'client-ready' feel; the most designed, least casual.">
+<div class="scene">
+  <div class="left">
+    <span class="kicker">Playground · Session 12</span>
+    <h1>Thinking,<br><em>typeset.</em></h1>
+    <div class="msgs">
+      <div class="b"><span class="lbl">Mary · How Might We</span>Your three complaints about the industry are all the same complaint wearing different clothes. May I reframe them as one "How might we…" and make it the headline of your piece?</div>
+      <div class="b user">go on…</div>
+      <div class="b"><span class="lbl">Mary</span>"How might we make strategy feel like a product you unbox — not a 60-page PDF you dread?" It's on the page now. React to it.</div>
+    </div>
+    <div class="inputx">Speak plainly — I'll do the typesetting…</div>
+  </div>
+  <div class="right">
+    <h2>The Unboxable Strategy</h2>
+    <div class="dek">Working notes toward a service clients actually open — shaped in conversation, 14 July 2026</div>
+    <div class="cols">
+      <p>Every consultant sells thinking. Almost none of them package it. The deliverable — that 60-page PDF — is where good strategy goes to be ignored.</p>
+      <div class="pull">"How might we make strategy feel like a product you unbox?"</div>
+      <p>Three complaints surfaced in this session: decks nobody reads, recommendations without owners, and kickoffs that restate the brief. One root: the work is formatted for the author, not the recipient.</p>
+      <p>Candidate moves — the one-page physical mailer, the 15-minute video walkthrough, the "first Monday" checklist…</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ================= 9 · THE JOURNEY ================= -->
+<section class="mock m9" data-title="9 · The Journey" data-concept="A visible method rail: Topic → Technique → Diverge → Converge → Document. Teaches the BMad method literally; adds ceremony to quick sessions.">
+<div class="scene">
+  <div class="railtop">
+    <div class="steps">
+      <div class="step done"><span class="n">✓</span>Topic</div><div class="conn done"></div>
+      <div class="step done"><span class="n">✓</span>Technique</div><div class="conn done"></div>
+      <div class="step now"><span class="n">3</span>Diverge</div><div class="conn"></div>
+      <div class="step"><span class="n">4</span>Converge</div><div class="conn"></div>
+      <div class="step"><span class="n">5</span>Document</div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="stagecard">
+      <span class="phase">Step 3 · Diverge — Cross-Pollination</span>
+      <h2>Steal from another world</h2>
+      <div class="desc">We're generating, not judging. Mary throws you an industry; you steal its best move for your onboarding problem. 12 ideas so far — aim for 20 before we converge.</div>
+      <div class="b mary">How does a <b>Michelin restaurant</b> handle "onboarding"? They don't hand you a menu manual — they set the table before you arrive. What's your version of setting the table?</div>
+      <div class="b user">maybe the workspace is pre-filled with their data before the first call?</div>
+      <div class="b mary">💡 Idea 13 — "the pre-set table." Next world: how does a <b>video game</b> onboard without a manual?</div>
+    </div>
+    <div class="sidecard">
+      <h4>🧺 Harvest</h4>
+      <div class="harvest">Pre-fill workspace before kickoff ("set table")</div>
+      <div class="harvest">First-run tutorial disguised as first task</div>
+      <div class="harvest">Concierge week, then self-serve</div>
+      <div class="harvest">Kill the manual; ship 3 defaults</div>
+      <div class="count">13 ideas · step 4 unlocks at ~20</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ================= 10 · THE MESSENGER ================= -->
+<section class="mock m10" data-title="10 · The Messenger" data-concept="A phone-first thread — texting a brilliant friend. Softest entry, perfect for spurts; small canvas means doc lives as attachments.">
+<div class="scene">
+  <div class="phone">
+    <div class="phd"><div class="av">M</div><div><b>Mary · Playground</b><small>online · brainstorming with you</small></div></div>
+    <div class="thread">
+      <div class="b mary">Morning! You left off mid-thought yesterday: <i>"the retreat idea feels expensive."</i> Expensive for them — or scary for you? 😄</div>
+      <div class="b user">…ok fair. scary for me</div>
+      <div class="b mary">Then let's run <b>The $0 Mandate</b>: how would you run the retreat spending nothing at all?</div>
+      <div class="chips"><span class="chip">▶ run it</span><span class="chip">something gentler</span><span class="chip">why this one?</span></div>
+      <div class="b user">borrowed venue from a client?? cross-promo??</div>
+      <div class="b mary">Two ideas in 10 seconds — see what fear was hiding? 📌 Both saved. Here's your doc so far:</div>
+      <div class="doccard">
+        <div class="dt"><div class="ic">📄</div><div><b>Retreat — de-risked plan</b><small>7 ideas · 2 insights · updating live</small></div></div>
+        <div class="acts"><span>Open</span><span>PDF</span><span>Send</span></div>
+      </div>
+    </div>
+    <div class="inputrow"><div class="field">Message Mary…</div><div class="mic">🎙</div></div>
+  </div>
+</div>
+</section>
+
+<div id="viewerbar">
+  <button id="prev">←</button><button id="next">→</button>
+  <span class="num" id="counter">1 / 10</span>
+  <button class="dev on" id="devL">💻 Laptop</button>
+  <button class="dev" id="devP">📱 Phone</button>
+  <span class="title" id="vtitle"></span>
+  <span class="concept" id="vconcept"></span>
+  <div id="dots"></div>
+</div>
+
+<script>
+const mocks=[...document.querySelectorAll('.mock')];
+const dots=document.getElementById('dots');
+mocks.forEach((m,i)=>{const d=document.createElement('span');d.textContent=i+1;d.onclick=()=>go(i);dots.appendChild(d)});
+let cur=0;
+function go(i){cur=(i+mocks.length)%mocks.length;
+ mocks.forEach((m,j)=>m.classList.toggle('active',j===cur));
+ [...dots.children].forEach((d,j)=>d.classList.toggle('on',j===cur));
+ document.getElementById('counter').textContent=(cur+1)+' / '+mocks.length;
+ document.getElementById('vtitle').textContent=mocks[cur].dataset.title;
+ document.getElementById('vconcept').textContent=mocks[cur].dataset.concept;}
+document.getElementById('prev').onclick=()=>go(cur-1);
+document.getElementById('next').onclick=()=>go(cur+1);
+const bL=document.getElementById('devL'),bP=document.getElementById('devP');
+function dev(ph){document.body.classList.toggle('ph',ph);bL.classList.toggle('on',!ph);bP.classList.toggle('on',ph)}
+bL.onclick=()=>dev(false);bP.onclick=()=>dev(true);
+addEventListener('keydown',e=>{
+ if(e.key==='ArrowRight')go(cur+1);
+ if(e.key==='ArrowLeft')go(cur-1);
+ if(e.key.toLowerCase()==='m')dev(!document.body.classList.contains('ph'));
+});
+go(0);
+</script>
+</body>
+</html>
