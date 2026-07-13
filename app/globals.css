@@ -1,0 +1,118 @@
+/* Design tokens + styles ported from playground-final-mock.html (D × F composite). */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: 'Nunito', sans-serif;
+  background: var(--bg);
+  overflow: hidden;
+  color: var(--ink);
+}
+button { font-family: inherit; border: none; background: none; cursor: pointer; }
+input { font-family: inherit; }
+
+:root {
+  --bg: #faf6f1; --panel: #fff; --ink: #453a4e; --dim: #a196ad; --line: #eee5f2;
+  --vio: #7048a8; --vio-soft: #f3ebfa; --coral: #ff7d6b; --coral2: #ff6f91;
+  --mint: #e4f4e0; --mint-ink: #2e7040; --amber: #fff3d6; --amber-ink: #8a6414;
+}
+
+/* ================= APP GRID (resizable) ================= */
+#app { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 6px minmax(320px, 1fr) 6px 460px; }
+.gutter { background: transparent; position: relative; cursor: col-resize; z-index: 5; touch-action: none; }
+.gutter::after { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 4px; height: 44px; border-radius: 3px; background: #ddd0e8; opacity: .7; transition: .15s; }
+.gutter:hover::after, .gutter.drag::after { background: var(--vio); opacity: 1; height: 70px; }
+
+/* ================= SIDEBAR ================= */
+#side { background: var(--vio-soft); margin: 14px 0 14px 14px; border-radius: 24px; padding: 18px 14px; display: flex; flex-direction: column; gap: 6px; overflow: auto; min-width: 0; }
+#side .logo { font-weight: 900; font-size: 20px; color: var(--vio); padding: 0 6px; margin-bottom: 8px; }
+#side .newbtn { display: block; width: 100%; background: var(--vio); color: #fff; border-radius: 14px; padding: 11px; font-weight: 900; font-size: 13.5px; text-align: center; box-shadow: 0 4px 0 #57367f; margin-bottom: 10px; }
+#side h6 { font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: .18em; text-transform: uppercase; color: #a98fc9; padding: 8px 6px 4px; }
+.convo { border-radius: 14px; padding: 9px 11px; font-size: 13px; font-weight: 700; color: #7d6f8a; display: flex; align-items: center; gap: 7px; }
+.convo.on { background: #fff; color: var(--ink); box-shadow: 0 2px 8px rgba(90, 60, 130, .12); }
+#side .foot { margin-top: auto; font-size: 11px; color: #a98fc9; padding: 10px 6px 0; line-height: 1.5; }
+#side .foot b { color: var(--vio); }
+
+/* ================= CHAT ================= */
+#chat { display: flex; flex-direction: column; padding: 22px 26px 16px; min-width: 0; }
+#chat .hdr { display: flex; align-items: center; gap: 11px; margin-bottom: 6px; }
+#chat .ava { width: 42px; height: 42px; border-radius: 16px; background: linear-gradient(135deg, var(--coral), var(--coral2)); color: #fff; display: grid; place-items: center; font-weight: 900; font-size: 17px; font-family: 'Fraunces', serif; flex: none; }
+#chat .hdr b { font-size: 16px; font-weight: 900; color: var(--ink); }
+#chat .hdr small { display: block; font-size: 11.5px; color: var(--dim); font-weight: 700; }
+#chat .hdr .mode { background: var(--amber); color: var(--amber-ink); font-size: 11px; font-weight: 900; border-radius: 99px; padding: 6px 13px; }
+#chat .hdr .right { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+#chat .msgs { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 13px; padding: 14px 4px 6px; }
+.b { max-width: 82%; padding: 12px 16px; border-radius: 18px; font-size: 13.5px; line-height: 1.55; font-weight: 600; color: var(--ink); white-space: pre-wrap; overflow-wrap: break-word; }
+.b.mary { background: var(--panel); box-shadow: 0 2px 8px rgba(90, 60, 130, .09); border-bottom-left-radius: 6px; }
+.b.user { background: var(--vio); color: #fff; align-self: flex-end; border-bottom-right-radius: 6px; }
+.b.honest { background: var(--amber); box-shadow: none; font-size: 12.5px; color: #6b5620; }
+.b.honest b { color: var(--amber-ink); }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.chips .lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+.chip { background: #fff; border: 1.5px solid #e6dcf0; color: var(--ink); font-size: 12px; font-weight: 800; padding: 8px 14px; border-radius: 99px; box-shadow: 0 1px 4px rgba(90, 60, 130, .07); cursor: pointer; }
+.chip:hover { border-color: var(--vio); color: var(--vio); }
+.chip:disabled { opacity: .5; cursor: default; }
+.chip.soft { background: var(--mint); border-color: transparent; color: var(--mint-ink); }
+
+/* technique row */
+.techrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.techrow .lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+.tech { background: var(--vio-soft); border: 1.5px solid transparent; color: var(--vio); font-size: 12px; font-weight: 800; padding: 8px 14px; border-radius: 99px; cursor: pointer; }
+.tech:hover { border-color: var(--vio); }
+.tech:disabled { opacity: .5; cursor: default; }
+.tech.dice { background: #fff; border-color: #e6dcf0; color: var(--ink); }
+.tech.dice:hover { border-color: var(--vio); color: var(--vio); }
+
+/* model toggle */
+.mtoggle { display: flex; background: #fff; border: 1.5px solid #e6dcf0; border-radius: 99px; padding: 3px; gap: 2px; }
+.mtoggle button { font-size: 11px; font-weight: 900; padding: 5px 12px; border-radius: 99px; color: var(--dim); }
+.mtoggle button.on { background: var(--vio); color: #fff; }
+
+/* input */
+#chat .inputw { margin-top: 14px; }
+#chat .input { background: #fff; border-radius: 18px; padding: 6px 8px 6px 17px; font-size: 13.5px; color: var(--ink); font-weight: 600; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 10px rgba(90, 60, 130, .1); }
+#chat .input input { flex: 1; border: none; outline: none; font-size: 13.5px; font-weight: 600; color: var(--ink); background: transparent; padding: 8px 0; }
+#chat .input input::placeholder { color: #b9aec6; }
+#chat .input input:disabled { opacity: .6; }
+#chat .input .send { width: 34px; height: 34px; border-radius: 13px; background: linear-gradient(135deg, var(--coral), var(--coral2)); color: #fff; display: grid; place-items: center; flex: none; font-size: 15px; }
+#chat .input .send:disabled { opacity: .5; cursor: default; }
+
+/* ================= DOC PANEL ================= */
+#docpane { margin: 14px 14px 14px 0; min-width: 0; display: flex; flex-direction: column; }
+#docpane .dhdr { display: flex; align-items: center; gap: 9px; padding: 2px 6px 10px; }
+#docpane .dhdr b { font-size: 13.5px; font-weight: 900; color: var(--ink); }
+#docpane .dhdr .live { width: 8px; height: 8px; border-radius: 50%; background: #4cc38a; box-shadow: 0 0 0 3px #4cc38a33; }
+#docpane .dhdr .acts { margin-left: auto; display: flex; gap: 7px; }
+#docpane .dhdr .act { font-size: 11px; font-weight: 900; border-radius: 10px; padding: 6px 12px; background: #fff; color: var(--vio); box-shadow: 0 1px 4px rgba(90, 60, 130, .1); cursor: pointer; opacity: .55; }
+#paper { flex: 1; background: #fffdf9; border-radius: 20px; box-shadow: 0 14px 44px rgba(90, 60, 130, .16); overflow: auto; padding: 44px 48px; }
+#paper .doctitle { font-family: 'Fraunces', serif; font-weight: 900; font-size: 27px; line-height: 1.12; color: #2c2433; letter-spacing: -.01em; }
+#paper .docmeta { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #a89bb5; margin: 10px 0 6px; letter-spacing: .05em; }
+#paper .rule { height: 3px; background: linear-gradient(90deg, var(--vio) 0 56px, #efe6f7 56px); border-radius: 2px; margin: 14px 0 22px; }
+#paper p { font-family: 'Newsreader', serif; font-size: 14.5px; line-height: 1.75; color: #4a4152; margin-bottom: 10px; }
+#paper .callout { background: var(--mint); border-radius: 14px; padding: 14px 18px; margin: 16px 0; }
+#paper .callout b { font-family: 'Nunito'; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--mint-ink); display: block; margin-bottom: 5px; }
+#paper .callout p { margin: 0; font-size: 13.5px; }
+#paper .sig { margin-top: 26px; display: flex; align-items: center; gap: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; color: #a89bb5; letter-spacing: .08em; }
+#paper .sig::before, #paper .sig::after { content: ""; flex: 1; height: 1px; background: #efe6f7; }
+
+/* ================= LOGIN ================= */
+/* body is overflow:hidden for the app grid — the login view scrolls on its own
+   so the card never clips on short viewports. */
+#login { height: 100dvh; overflow: auto; display: grid; place-items: center; background: var(--bg); padding: 20px; }
+#login .card { background: var(--panel); border-radius: 24px; box-shadow: 0 14px 44px rgba(90, 60, 130, .16); padding: 40px 38px; width: min(380px, 100%); text-align: center; }
+#login .logo { font-weight: 900; font-size: 24px; color: var(--vio); margin-bottom: 6px; }
+#login .sub { font-size: 13px; color: var(--dim); font-weight: 700; margin-bottom: 22px; }
+#login input { width: 100%; border: 1.5px solid #e6dcf0; border-radius: 14px; padding: 12px 15px; font-size: 14px; font-weight: 600; color: var(--ink); outline: none; margin-bottom: 12px; }
+#login input:focus { border-color: var(--vio); }
+#login button { width: 100%; background: var(--vio); color: #fff; border-radius: 14px; padding: 12px; font-weight: 900; font-size: 14px; box-shadow: 0 4px 0 #57367f; }
+#login button:disabled { opacity: .6; }
+#login .err { background: var(--amber); color: var(--amber-ink); font-size: 12.5px; font-weight: 800; border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
+
+/* ================= PHONE ================= */
+@media (max-width: 800px) {
+  #app { grid-template-columns: 1fr !important; }
+  #side, .gutter, #docpane { display: none; }
+  #chat { padding: 16px 16px 10px; }
+  #chat .hdr .mode { display: none; }
+  .b { max-width: 90%; }
+}
