@@ -133,6 +133,331 @@ async function providerFetch(
   }
 }
 
+/* ==========================================================================
+ * Native function-calling (tool) support — ENGINE-ONLY, dormant.
+ *
+ * Everything below is additive and reached ONLY through `streamChatWithTools`
+ * and `supportsFunctionCalling`. The live chat path calls `streamChat` (above),
+ * whose request bodies are untouched: no `tools`/`functionDeclarations` field is
+ * ever added when tools aren't passed. Guard = a distinct entrypoint, so the
+ * live behavior is byte-identical.
+ * ========================================================================== */
+
+/** One tool exposed to the model, JSON-schema `parameters` (OpenAI/Gemini shape). */
+export type ToolSchema = {
+  name: string;
+  description: string;
+  /** JSON Schema object for the tool's arguments. */
+  parameters: Record<string, unknown>;
+};
+
+/** A tool call the model requested. `args` is the parsed JSON arguments object. */
+export type ToolCall = {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+};
+
+/**
+ * Canonical loop message. The engine's transcript is a `ToolMsg[]`; each provider
+ * client serializes it to its own wire format.
+ *  - user/assistant text turns
+ *  - an assistant turn that requested tools (`toolCalls`)
+ *  - a `tool` turn carrying one tool's result (echoed back to the model)
+ */
+export type ToolMsg =
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
+  | { role: 'tool'; toolCallId: string; name: string; content: string };
+
+/** The result of one model turn under the tool protocol. */
+export type ModelTurn = {
+  /** Accumulated user-facing text (may be empty on a pure tool-call turn). */
+  text: string;
+  /** Tool calls the model requested this turn (empty on a final turn). */
+  toolCalls: ToolCall[];
+  usage: UsageTokens;
+};
+
+/**
+ * Per-provider/model function-calling capability. Gemini is always capable.
+ * OpenRouter varies by model, so we allowlist known-capable families and honor
+ * an explicit `OPENROUTER_TOOLS=true` override. When false, the engine uses the
+ * structured-text `<tool>` fallback instead.
+ */
+const OPENROUTER_TOOL_PATTERNS: RegExp[] = [
+  /gpt-4/,
+  /gpt-3\.5/,
+  /o[13]-/,
+  /claude-3/,
+  /gemini/,
+  /mistral/,
+  /mixtral/,
+  /llama-3\.[13]/,
+  /qwen/,
+  /command-r/,
+  /deepseek/,
+];
+
+export function openrouterSupportsTools(model: string, envOverride?: boolean): boolean {
+  if (envOverride) return true;
+  const m = (model || '').toLowerCase();
+  return OPENROUTER_TOOL_PATTERNS.some((re) => re.test(m));
+}
+
+/** True when the given provider/model can drive native function-calling. */
+export function supportsFunctionCalling(provider: Provider, model?: string): boolean {
+  if (provider === 'gemini') return true;
+  const resolved = model ?? modelForProvider('openrouter');
+  return openrouterSupportsTools(resolved, process.env.OPENROUTER_TOOLS === 'true');
+}
+
+/* ---------------- ToolMsg → provider payloads (pure; exported for tests) -------- */
+
+/** Serialize the canonical transcript into Gemini `contents[]`. */
+export function toGeminiContents(messages: ToolMsg[]): unknown[] {
+  return messages.map((m) => {
+    if (m.role === 'user') return { role: 'user', parts: [{ text: m.content }] };
+    if (m.role === 'tool') {
+      return {
+        role: 'user',
+        parts: [{ functionResponse: { name: m.name, response: { result: m.content } } }],
+      };
+    }
+    // assistant
+    const parts: unknown[] = [];
+    if (m.content) parts.push({ text: m.content });
+    for (const c of m.toolCalls ?? []) parts.push({ functionCall: { name: c.name, args: c.args } });
+    if (parts.length === 0) parts.push({ text: '' });
+    return { role: 'model', parts };
+  });
+}
+
+/** Serialize the canonical transcript into OpenRouter (OpenAI-compat) messages. */
+export function toOpenRouterMessages(messages: ToolMsg[]): unknown[] {
+  return messages.map((m) => {
+    if (m.role === 'user') return { role: 'user', content: m.content };
+    if (m.role === 'tool') {
+      return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
+    }
+    // assistant
+    if (m.toolCalls && m.toolCalls.length > 0) {
+      return {
+        role: 'assistant',
+        content: m.content || null,
+        tool_calls: m.toolCalls.map((c) => ({
+          id: c.id,
+          type: 'function',
+          function: { name: c.name, arguments: JSON.stringify(c.args) },
+        })),
+      };
+    }
+    return { role: 'assistant', content: m.content };
+  });
+}
+
+/** Gemini `tools` block from our tool schemas. */
+export function toGeminiTools(tools: ToolSchema[]): unknown {
+  return [
+    {
+      functionDeclarations: tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      })),
+    },
+  ];
+}
+
+/** OpenRouter `tools` array from our tool schemas. */
+export function toOpenRouterTools(tools: ToolSchema[]): unknown {
+  return tools.map((t) => ({
+    type: 'function',
+    function: { name: t.name, description: t.description, parameters: t.parameters },
+  }));
+}
+
+/* ---------------- non-streaming (accumulating) tool turn ---------------- */
+
+/** Drain an SSE `data:` payload stream, calling `onPayload` for each line. */
+async function drainSse(
+  body: ReadableStream<Uint8Array>,
+  onPayload: (payload: string) => void,
+): Promise<void> {
+  const reader = sseDataStream(body).getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) onPayload(value);
+  }
+}
+
+function safeJsonParse(s: string): Record<string, unknown> {
+  try {
+    const v = JSON.parse(s);
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * One model turn with the (optional) tool set. Accumulates the full turn —
+ * user-facing text plus any function calls — and returns a `ModelTurn`. When
+ * `tools` is omitted no tool field is sent (used by the structured-text
+ * fallback, which drives tools purely through prompt text).
+ *
+ * Engine-only. Never on the live chat path.
+ */
+export async function streamChatWithTools(
+  provider: Provider,
+  system: string,
+  messages: ToolMsg[],
+  tools?: ToolSchema[],
+  modelOverride?: string,
+): Promise<ModelTurn> {
+  if (provider === 'gemini') return geminiToolTurn(system, messages, tools, modelOverride);
+  if (provider === 'openrouter') return openRouterToolTurn(system, messages, tools, modelOverride);
+  throw new ProviderError(provider, 400, 'upstream', `Unknown provider: ${provider satisfies never}`);
+}
+
+async function geminiToolTurn(
+  system: string,
+  messages: ToolMsg[],
+  tools: ToolSchema[] | undefined,
+  modelOverride?: string,
+): Promise<ModelTurn> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new ProviderError('gemini', 500, 'missing-key', 'GEMINI_API_KEY is not set');
+  const model = modelOverride || modelForProvider('gemini');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+
+  const body: Record<string, unknown> = {
+    system_instruction: { parts: [{ text: system }] },
+    contents: toGeminiContents(messages),
+  };
+  if (tools && tools.length > 0) body.tools = toGeminiTools(tools);
+
+  const res = await providerFetch('gemini', url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok || !res.body) {
+    res.body?.cancel().catch(() => {});
+    throw new ProviderError('gemini', res.status, 'upstream', `Gemini upstream error (${res.status})`);
+  }
+
+  const usage: UsageTokens = { tokensIn: null, tokensOut: null };
+  let text = '';
+  const toolCalls: ToolCall[] = [];
+  await drainSse(res.body, (payload) => {
+    if (!payload || payload === '[DONE]') return;
+    let json: {
+      candidates?: { content?: { parts?: { text?: string; functionCall?: { name?: string; args?: Record<string, unknown> } }[] } }[];
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+    };
+    try {
+      json = JSON.parse(payload);
+    } catch {
+      return;
+    }
+    const parts = json.candidates?.[0]?.content?.parts ?? [];
+    for (const p of parts) {
+      if (typeof p.text === 'string') text += p.text;
+      if (p.functionCall && p.functionCall.name) {
+        toolCalls.push({
+          id: `call_${toolCalls.length}`,
+          name: p.functionCall.name,
+          args: p.functionCall.args ?? {},
+        });
+      }
+    }
+    const um = json.usageMetadata;
+    if (um) {
+      if (typeof um.promptTokenCount === 'number') usage.tokensIn = um.promptTokenCount;
+      if (typeof um.candidatesTokenCount === 'number') usage.tokensOut = um.candidatesTokenCount;
+    }
+  });
+  return { text, toolCalls, usage };
+}
+
+async function openRouterToolTurn(
+  system: string,
+  messages: ToolMsg[],
+  tools: ToolSchema[] | undefined,
+  modelOverride?: string,
+): Promise<ModelTurn> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new ProviderError('openrouter', 500, 'missing-key', 'OPENROUTER_API_KEY is not set');
+  const model = modelOverride || modelForProvider('openrouter');
+
+  const body: Record<string, unknown> = {
+    model,
+    stream: true,
+    stream_options: { include_usage: true },
+    messages: [{ role: 'system', content: system }, ...toOpenRouterMessages(messages)],
+  };
+  if (tools && tools.length > 0) body.tools = toOpenRouterTools(tools);
+
+  const res = await providerFetch('openrouter', 'https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok || !res.body) {
+    res.body?.cancel().catch(() => {});
+    throw new ProviderError('openrouter', res.status, 'upstream', `OpenRouter upstream error (${res.status})`);
+  }
+
+  const usage: UsageTokens = { tokensIn: null, tokensOut: null };
+  let text = '';
+  // Accumulate streamed tool_call fragments keyed by their delta index.
+  const acc = new Map<number, { id: string; name: string; args: string }>();
+  await drainSse(res.body, (payload) => {
+    if (!payload || payload === '[DONE]') return;
+    let json: {
+      choices?: {
+        delta?: {
+          content?: string;
+          tool_calls?: { index?: number; id?: string; function?: { name?: string; arguments?: string } }[];
+        };
+      }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    try {
+      json = JSON.parse(payload);
+    } catch {
+      return;
+    }
+    const delta = json.choices?.[0]?.delta;
+    if (delta?.content) text += delta.content;
+    for (const tc of delta?.tool_calls ?? []) {
+      const idx = tc.index ?? 0;
+      const cur = acc.get(idx) ?? { id: '', name: '', args: '' };
+      if (tc.id) cur.id = tc.id;
+      if (tc.function?.name) cur.name = tc.function.name;
+      if (tc.function?.arguments) cur.args += tc.function.arguments;
+      acc.set(idx, cur);
+    }
+    const u = json.usage;
+    if (u) {
+      if (typeof u.prompt_tokens === 'number') usage.tokensIn = u.prompt_tokens;
+      if (typeof u.completion_tokens === 'number') usage.tokensOut = u.completion_tokens;
+    }
+  });
+
+  const toolCalls: ToolCall[] = [...acc.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([idx, c]) => ({
+      id: c.id || `call_${idx}`,
+      name: c.name,
+      args: safeJsonParse(c.args),
+    }))
+    .filter((c) => c.name);
+  return { text, toolCalls, usage };
+}
+
 /* ---------------- SSE line parsing (shared) ---------------- */
 
 /**
