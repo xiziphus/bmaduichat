@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { parseChips, visibleWhileStreaming } from '@/lib/chips';
 import { providerLabel, type Msg, type Provider } from '@/lib/llm';
 import { drawTwo, type Technique } from '@/lib/techniques';
+import {
+  extractBuilderNotes,
+  BUILDER_NOTES_KEY,
+  type BuilderNote,
+} from '@/lib/builder-notes';
 import ModelToggle from './ModelToggle';
 
 type UiMessage = {
@@ -29,15 +34,44 @@ export default function ChatPane({
   onProviderChange: (p: Provider) => void;
 }) {
   const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [catalog, setCatalog] = useState<Technique[]>([]);
   const [pair, setPair] = useState<[Technique, Technique] | null>(null);
   const [activeTechnique, setActiveTechnique] = useState<Technique | undefined>(undefined);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [notes, setNotes] = useState<BuilderNote[]>([]);
+  const [notesOpen, setNotesOpen] = useState(false);
   const msgsRef = useRef<HTMLDivElement>(null);
 
-  // Draw the initial random pair client-side only, so SSR/CSR markup match.
+  // Load the full catalog from the authed API (fs reads stay server-side), then
+  // draw the initial random pair client-side so SSR/CSR markup match.
   useEffect(() => {
-    setPair(drawTwo());
+    let alive = true;
+    fetch('/api/techniques')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('techniques fetch failed'))))
+      .then((data: { techniques?: Technique[] }) => {
+        if (!alive) return;
+        const list = data.techniques ?? [];
+        setCatalog(list);
+        if (list.length >= 2) setPair(drawTwo(list));
+      })
+      .catch(() => {
+        /* leave the technique row hidden if the catalog can't load */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Builder notes persist in this browser only (interim; goal 4 ships the real
+  // outbox). Survives the session-reset remount because it re-reads storage.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(BUILDER_NOTES_KEY);
+      if (raw) setNotes(JSON.parse(raw) as BuilderNote[]);
+    } catch {
+      /* corrupt/absent storage → start empty */
+    }
   }, []);
 
   useEffect(() => {
@@ -46,8 +80,45 @@ export default function ChatPane({
   }, [messages]);
 
   function shuffleTechniques() {
-    if (!pair || streaming) return;
-    setPair(drawTwo(pair.map((t) => t.id)));
+    if (!pair || streaming || catalog.length < 2) return;
+    setPair(drawTwo(catalog, pair.map((t) => t.id)));
+  }
+
+  function captureBuilderNotes(text: string) {
+    const excerpts = extractBuilderNotes(text);
+    if (excerpts.length === 0) return;
+    const ts = Date.now();
+    setNotes((prev) => {
+      const next = [...prev, ...excerpts.map((excerpt) => ({ excerpt, ts }))];
+      try {
+        localStorage.setItem(BUILDER_NOTES_KEY, JSON.stringify(next));
+      } catch {
+        /* storage full/blocked → keep in-memory only */
+      }
+      return next;
+    });
+  }
+
+  async function copyNotes() {
+    // Newest-first, joined as markdown bullets.
+    const md = [...notes]
+      .reverse()
+      .map((n) => `- ${n.excerpt}`)
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(md);
+    } catch {
+      /* clipboard blocked → no-op */
+    }
+  }
+
+  function clearNotes() {
+    setNotes([]);
+    try {
+      localStorage.removeItem(BUILDER_NOTES_KEY);
+    } catch {
+      /* ignore */
+    }
   }
 
   async function runChat(history: UiMessage[], technique?: string) {
@@ -130,6 +201,7 @@ export default function ChatPane({
         return;
       }
       finalizePlaceholder(text, chips);
+      captureBuilderNotes(text);
     } catch {
       replaceWithError(`${providerLabel(provider)} hit a snag — try again or switch model.`);
     } finally {
@@ -180,6 +252,52 @@ export default function ChatPane({
         )}
         <div className="right">
           <ModelToggle provider={provider} onChange={onProviderChange} disabled={streaming} />
+          <div className="noteswrap">
+            <button
+              type="button"
+              className="notesbtn"
+              onClick={() => setNotesOpen((o) => !o)}
+              aria-label="Builder notes"
+              aria-expanded={notesOpen}
+              title="Builder notes"
+            >
+              📮
+              {notes.length > 0 && <span className="notesbadge">{notes.length}</span>}
+            </button>
+            {notesOpen && (
+              <div className="notesdrawer" role="dialog" aria-label="Builder notes">
+                <div className="notesdrawer-hd">
+                  <b>📮 Builder notes</b>
+                  <div className="notesdrawer-acts">
+                    <button type="button" onClick={copyNotes} disabled={notes.length === 0}>
+                      Copy all
+                    </button>
+                    <button type="button" onClick={clearNotes} disabled={notes.length === 0}>
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="notesdrawer-body">
+                  {notes.length === 0 ? (
+                    <p className="notesempty">
+                      No notes yet — when Mary says &ldquo;noted for the builder&rdquo;, it lands
+                      here.
+                    </p>
+                  ) : (
+                    [...notes].reverse().map((n, i) => (
+                      <div className="noteitem" key={`${n.ts}-${i}`}>
+                        <p>{n.excerpt}</p>
+                        <time>{new Date(n.ts).toLocaleString()}</time>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="notesfoot">
+                  Interim: stored in this browser only — the real builder outbox ships in goal 4.
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

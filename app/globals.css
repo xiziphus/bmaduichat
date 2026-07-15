@@ -19,19 +19,29 @@ input { font-family: inherit; }
 
 /* ================= SCROLLBARS =================
    macOS overlay scrollbars are invisible until scrolling — style thin,
-   always-visible ones consistent with the pastel skin. */
+   always-visible ones consistent with the pastel skin.
+   ::-webkit-scrollbar is the PRIMARY styling (visible 8px pastel thumb).
+   In modern Chrome, setting `scrollbar-width` would override the webkit
+   pseudo-elements, so the Firefox-only `scrollbar-width`/`scrollbar-color`
+   fallback is gated behind @supports for engines WITHOUT ::-webkit-scrollbar. */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #ddd0e8; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #c3aede; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--vio); }
-/* Firefox fallback on every scroll container */
-#side, #chat .msgs, #paper, #login {
-  scrollbar-width: thin;
-  scrollbar-color: #ddd0e8 transparent;
+@supports not selector(::-webkit-scrollbar) {
+  #side, #chat .msgs, #paper, #login {
+    scrollbar-width: thin;
+    scrollbar-color: #ddd0e8 transparent;
+  }
 }
 
-/* ================= APP GRID (resizable) ================= */
-#app { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 6px minmax(320px, 1fr) 6px 460px; }
+/* ================= APP GRID (resizable) =================
+   Height-constrained to the viewport so panes scroll INTERNALLY rather than
+   growing the page. Every grid item + flex ancestor of a scroll pane carries
+   min-height: 0 (and min-width: 0) so it can shrink below its content and hand
+   the overflow to the scroll container instead of pushing siblings off-screen. */
+#app { position: absolute; inset: 0; height: 100dvh; display: grid; grid-template-columns: 270px 6px minmax(320px, 1fr) 6px 460px; }
+#app > * { min-height: 0; min-width: 0; }
 .gutter { background: transparent; position: relative; cursor: col-resize; z-index: 5; touch-action: none; }
 .gutter::after { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 4px; height: 44px; border-radius: 3px; background: #ddd0e8; opacity: .7; transition: .15s; }
 .gutter:hover::after, .gutter.drag::after { background: var(--vio); opacity: 1; height: 70px; }
@@ -54,7 +64,7 @@ input { font-family: inherit; }
 #chat .hdr small { display: block; font-size: 11.5px; color: var(--dim); font-weight: 700; }
 #chat .hdr .mode { background: var(--amber); color: var(--amber-ink); font-size: 11px; font-weight: 900; border-radius: 99px; padding: 6px 13px; }
 #chat .hdr .right { margin-left: auto; display: flex; align-items: center; gap: 9px; }
-#chat .msgs { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 13px; padding: 14px 4px 6px; }
+#chat .msgs { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 13px; padding: 14px 4px 6px; }
 .b { max-width: 82%; padding: 12px 16px; border-radius: 18px; font-size: 13.5px; line-height: 1.55; font-weight: 600; color: var(--ink); white-space: pre-wrap; overflow-wrap: break-word; }
 .b.mary { background: var(--panel); box-shadow: 0 2px 8px rgba(90, 60, 130, .09); border-bottom-left-radius: 6px; }
 .b.user { background: var(--vio); color: #fff; align-self: flex-end; border-bottom-right-radius: 6px; }
@@ -81,6 +91,25 @@ input { font-family: inherit; }
 .mtoggle button { font-size: 11px; font-weight: 900; padding: 5px 12px; border-radius: 99px; color: var(--dim); }
 .mtoggle button.on { background: var(--vio); color: #fff; }
 
+/* builder notes (📮) — interim in-browser capture, popover drawer */
+.noteswrap { position: relative; }
+.notesbtn { position: relative; width: 34px; height: 34px; border-radius: 12px; background: #fff; border: 1.5px solid #e6dcf0; display: grid; place-items: center; font-size: 15px; box-shadow: 0 1px 4px rgba(90, 60, 130, .08); }
+.notesbtn:hover { border-color: var(--vio); }
+.notesbadge { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: var(--coral); color: #fff; font-size: 10px; font-weight: 900; display: grid; place-items: center; }
+.notesdrawer { position: absolute; top: calc(100% + 8px); right: 0; width: 310px; max-height: 62vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 16px 46px rgba(90, 60, 130, .24); padding: 14px; z-index: 20; display: flex; flex-direction: column; gap: 11px; }
+.notesdrawer-hd { display: flex; align-items: center; gap: 8px; }
+.notesdrawer-hd b { font-size: 13px; font-weight: 900; color: var(--ink); }
+.notesdrawer-acts { margin-left: auto; display: flex; gap: 6px; }
+.notesdrawer-acts button { font-size: 10.5px; font-weight: 900; border-radius: 9px; padding: 5px 10px; background: var(--vio-soft); color: var(--vio); }
+.notesdrawer-acts button:hover { background: #e9dcf7; }
+.notesdrawer-acts button:disabled { opacity: .45; cursor: default; }
+.notesdrawer-body { display: flex; flex-direction: column; gap: 8px; }
+.noteitem { background: var(--vio-soft); border-radius: 12px; padding: 9px 11px; }
+.noteitem p { font-size: 12.5px; line-height: 1.5; font-weight: 600; color: var(--ink); }
+.noteitem time { display: block; margin-top: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--dim); letter-spacing: .05em; }
+.notesempty { font-size: 12.5px; color: var(--dim); font-weight: 700; line-height: 1.5; }
+.notesfoot { font-size: 10.5px; color: #a98fc9; font-weight: 700; line-height: 1.45; border-top: 1px solid var(--line); padding-top: 9px; }
+
 /* input */
 #chat .inputw { margin-top: 14px; }
 #chat .input { background: #fff; border-radius: 18px; padding: 6px 8px 6px 17px; font-size: 13.5px; color: var(--ink); font-weight: 600; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 10px rgba(90, 60, 130, .1); }
@@ -97,7 +126,7 @@ input { font-family: inherit; }
 #docpane .dhdr .live { width: 8px; height: 8px; border-radius: 50%; background: #4cc38a; box-shadow: 0 0 0 3px #4cc38a33; }
 #docpane .dhdr .acts { margin-left: auto; display: flex; gap: 7px; }
 #docpane .dhdr .act { font-size: 11px; font-weight: 900; border-radius: 10px; padding: 6px 12px; background: #fff; color: var(--vio); box-shadow: 0 1px 4px rgba(90, 60, 130, .1); cursor: pointer; opacity: .55; }
-#paper { flex: 1; background: #fffdf9; border-radius: 20px; box-shadow: 0 14px 44px rgba(90, 60, 130, .16); overflow: auto; padding: 44px 48px; }
+#paper { flex: 1; min-height: 0; background: #fffdf9; border-radius: 20px; box-shadow: 0 14px 44px rgba(90, 60, 130, .16); overflow: auto; padding: 44px 48px; }
 #paper .doctitle { font-family: 'Fraunces', serif; font-weight: 900; font-size: 27px; line-height: 1.12; color: #2c2433; letter-spacing: -.01em; }
 #paper .docmeta { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #a89bb5; margin: 10px 0 6px; letter-spacing: .05em; }
 #paper .rule { height: 3px; background: linear-gradient(90deg, var(--vio) 0 56px, #efe6f7 56px); border-radius: 2px; margin: 14px 0 22px; }

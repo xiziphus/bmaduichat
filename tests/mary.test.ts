@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildMarySystemPrompt } from '@/lib/mary';
-import { TECHNIQUES } from '@/lib/techniques';
+import { getTechniques, getTechnique } from '@/lib/techniques-catalog';
 
 describe('buildMarySystemPrompt', () => {
   const prompt = buildMarySystemPrompt();
@@ -60,11 +60,18 @@ describe('buildMarySystemPrompt', () => {
     expect(prompt).not.toContain('{project-root}');
   });
 
-  it('injects the current technique launch prompt when given', () => {
-    const t = TECHNIQUES[0];
+  it('lists the FULL catalog: a CSV-only technique and its verbatim gist (sentinel)', () => {
+    // Lotus Blossom is absent from the old curated 8 — proves the catalog is the CSV.
+    expect(prompt).toContain('Lotus Blossom');
+    // Sentinel gist string, verbatim from brain-methods.csv.
+    expect(prompt).toContain('Put the theme at the center of a 3x3 grid');
+  });
+
+  it('injects the current technique framing (gist, no launchPrompt) when given', () => {
+    const t = getTechnique('lotus-blossom') ?? getTechniques()[0];
     const withTechnique = buildMarySystemPrompt(t.id);
     expect(withTechnique).toContain(`CURRENT TECHNIQUE — the user just launched "${t.name}"`);
-    expect(withTechnique).toContain(t.launchPrompt);
+    expect(withTechnique).toContain(t.gist);
     expect(prompt).not.toContain('CURRENT TECHNIQUE');
   });
 });

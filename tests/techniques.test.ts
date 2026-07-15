@@ -1,44 +1,78 @@
 import { describe, it, expect } from 'vitest';
-import { TECHNIQUES, drawTwo } from '@/lib/techniques';
+import { drawTwo, slugify, categoryEmoji } from '@/lib/techniques';
+import { getTechniques, getTechnique } from '@/lib/techniques-catalog';
 
-describe('drawTwo', () => {
+describe('technique catalog (from brain-methods.csv)', () => {
+  const catalog = getTechniques();
+
+  it('loads the FULL BMad catalog, not a curated handful (> 100)', () => {
+    expect(catalog.length).toBeGreaterThan(100);
+  });
+
+  it('shapes each row as {id, name, category, gist, emoji} with a slug id', () => {
+    for (const t of catalog) {
+      expect(t.id).toBe(slugify(t.name));
+      expect(t.name.length).toBeGreaterThan(0);
+      expect(t.category.length).toBeGreaterThan(0);
+      expect(t.gist.length).toBeGreaterThan(0);
+      expect(t.emoji.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('carries CSV-only techniques absent from the old curated 8 (Lotus Blossom)', () => {
+    const lotus = getTechnique('lotus-blossom');
+    expect(lotus?.name).toBe('Lotus Blossom');
+    expect(lotus?.gist).toContain('Put the theme at the center of a 3x3 grid');
+  });
+
+  it('keeps gists verbatim, including quotes that were escaped in the CSV', () => {
+    const yesAnd = catalog.find((t) => t.name === 'Yes And Building');
+    expect(yesAnd?.gist).toContain('"Yes, and..."');
+  });
+
+  it('gives every category a stable emoji', () => {
+    expect(categoryEmoji('deep')).toBe('🔍');
+    expect(categoryEmoji('structured')).toBe('🧩');
+    expect(categoryEmoji('unknown-category')).toBe('💡');
+  });
+});
+
+describe('drawTwo (no-repeat contract unchanged)', () => {
+  const pool = getTechniques();
+
   it('draws exactly 2 distinct techniques from the pool', () => {
     for (let i = 0; i < 50; i++) {
-      const [a, b] = drawTwo();
+      const [a, b] = drawTwo(pool);
       expect(a.id).not.toBe(b.id);
-      expect(TECHNIQUES.some((t) => t.id === a.id)).toBe(true);
-      expect(TECHNIQUES.some((t) => t.id === b.id)).toBe(true);
+      expect(pool.some((t) => t.id === a.id)).toBe(true);
+      expect(pool.some((t) => t.id === b.id)).toBe(true);
     }
   });
 
   it('never redraws the excluded (currently shown) pair', () => {
-    const excluded = [TECHNIQUES[0].id, TECHNIQUES[1].id];
+    const excluded = [pool[0].id, pool[1].id];
     for (let i = 0; i < 100; i++) {
-      const [a, b] = drawTwo(excluded);
-      const ids = [a.id, b.id];
-      // The drawn pair must not be exactly the excluded pair (in either order),
-      // and individually neither drawn id should be from the excluded set.
+      const [a, b] = drawTwo(pool, excluded);
       expect(excluded.includes(a.id)).toBe(false);
       expect(excluded.includes(b.id)).toBe(false);
-      expect(ids[0]).not.toBe(ids[1]);
+      expect(a.id).not.toBe(b.id);
     }
   });
 
-  it('over-exclusion (7 of 8 excluded) still includes the one allowed technique', () => {
-    const allowed = TECHNIQUES[0].id;
-    const excluded = TECHNIQUES.slice(1).map((t) => t.id);
+  it('over-exclusion (all but one excluded) still includes the one allowed technique', () => {
+    const allowed = pool[0].id;
+    const excluded = pool.slice(1).map((t) => t.id);
     for (let i = 0; i < 100; i++) {
-      const [a, b] = drawTwo(excluded);
+      const [a, b] = drawTwo(pool, excluded);
       expect(a.id).not.toBe(b.id);
-      // The single non-excluded technique must always be in the drawn pair.
       expect([a.id, b.id]).toContain(allowed);
     }
   });
 
-  it('all techniques excluded still returns 2 distinct techniques (nothing left to respect)', () => {
-    const excluded = TECHNIQUES.map((t) => t.id);
+  it('all techniques excluded still returns 2 distinct techniques', () => {
+    const excluded = pool.map((t) => t.id);
     for (let i = 0; i < 50; i++) {
-      const [a, b] = drawTwo(excluded);
+      const [a, b] = drawTwo(pool, excluded);
       expect(a.id).not.toBe(b.id);
     }
   });

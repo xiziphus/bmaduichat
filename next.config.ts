@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
       './.claude/skills/bmad-agent-analyst/customize.toml',
       './.claude/skills/bmad-brainstorming/**',
     ],
+    // The techniques catalog reads brain-methods.csv at runtime; ship it into
+    // this function too (the tracer can't see the fs.readFileSync path).
+    '/api/techniques': ['./.claude/skills/bmad-brainstorming/assets/brain-methods.csv'],
   },
 };
 

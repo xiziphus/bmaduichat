@@ -1,4 +1,5 @@
-import { TECHNIQUES, getTechnique } from './techniques';
+import { getTechniques, getTechnique } from './techniques-catalog';
+import type { Technique } from './techniques';
 import { getBmadSections } from './bmad-source';
 
 /**
@@ -57,16 +58,31 @@ ${b.synthesis}
 ${WRAP_UP_ADAPTATION}`;
 }
 
+/** The full catalog, grouped by category, as "name — gist" lines (verbatim). */
+function buildCatalog(): string {
+  const byCategory = new Map<string, Technique[]>();
+  for (const t of getTechniques()) {
+    const list = byCategory.get(t.category) ?? [];
+    list.push(t);
+    byCategory.set(t.category, list);
+  }
+  const blocks: string[] = [];
+  for (const [category, list] of byCategory) {
+    const lines = list.map((t) => `- ${t.name} — ${t.gist}`).join('\n');
+    blocks.push(`${category}\n${lines}`);
+  }
+  return blocks.join('\n\n');
+}
+
 export function buildMarySystemPrompt(techniqueId?: string): string {
   const b = getBmadSections();
-  const catalog = TECHNIQUES.map((t) => `- ${t.name} (${t.category}): ${t.gist}`).join('\n');
 
   const sections: string[] = [
     buildPersona(),
     `FRAMING — hold this the whole run.\n${b.framing}`,
     `STANCE — Creative Partner. This app runs the Creative Partner stance.\n${b.stance}`,
     `KICKOFF — starting a session:\n${b.kickoff}`,
-    `TECHNIQUE POOL (the only techniques you run in this app):\n${catalog}`,
+    `TECHNIQUE CATALOG — the full BMad brainstorming catalog, grouped by category (name — gist). Any of these is fair game; when the user launches one, open it working from its gist below.\n\n${buildCatalog()}`,
     buildPhases(),
     HONEST_LIMITS,
     CHIPS_PROTOCOL,
@@ -75,8 +91,8 @@ export function buildMarySystemPrompt(techniqueId?: string): string {
   const technique = techniqueId ? getTechnique(techniqueId) : undefined;
   if (technique) {
     sections.push(`CURRENT TECHNIQUE — the user just launched "${technique.name}".
-${technique.launchPrompt}
-Open it now: a one-line framing of the lens at most, then your first question. Facilitate rather than lecture.`);
+Open ${technique.name} now, working from its catalog gist: ${technique.gist}
+Give at most a one-line framing of the lens, then your first question. Facilitate rather than lecture — no menus, no explaining the whole method up front.`);
   }
 
   return sections.join('\n\n');

@@ -22,6 +22,7 @@ const BRAIN_SKILL = path.join(SKILLS, 'bmad-brainstorming', 'SKILL.md');
 const MODE_PARTNER = path.join(SKILLS, 'bmad-brainstorming', 'references', 'mode-partner.md');
 const CONVERGE = path.join(SKILLS, 'bmad-brainstorming', 'references', 'converge.md');
 const FINALIZE = path.join(SKILLS, 'bmad-brainstorming', 'references', 'finalize.md');
+const BRAIN_METHODS_CSV = path.join(SKILLS, 'bmad-brainstorming', 'assets', 'brain-methods.csv');
 
 /** Read a repo-relative BMad file. Missing file → deployment/bundling bug. */
 function read(rel: string): string {
@@ -235,4 +236,113 @@ let cache: BmadSections | null = null;
 export function getBmadSections(): BmadSections {
   if (!cache) cache = compose();
   return cache;
+}
+
+// ---------------------------------------------------------------------------
+// brain-methods.csv — the full BMad brainstorming technique catalog (~108 rows)
+// ---------------------------------------------------------------------------
+
+/**
+ * RFC-4180-ish CSV parser. Handles quoted fields containing commas, `""`
+ * escaped quotes, multi-line quoted fields, a leading BOM, and CRLF/LF/lone-CR
+ * line endings. No dependency — the catalog is small and the format is fixed.
+ */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  let i = 0;
+
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // strip BOM
+
+  while (i < text.length) {
+    const c = text[i];
+
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"'; // "" → literal quote
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i++;
+        continue;
+      }
+      field += c;
+      i++;
+      continue;
+    }
+
+    if (c === '"') {
+      inQuotes = true;
+      i++;
+      continue;
+    }
+    if (c === ',') {
+      row.push(field);
+      field = '';
+      i++;
+      continue;
+    }
+    if (c === '\n' || c === '\r') {
+      // End the current record. Swallow the \n of a \r\n pair.
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+      i += c === '\r' && text[i + 1] === '\n' ? 2 : 1;
+      continue;
+    }
+    field += c;
+    i++;
+  }
+
+  // Trailing field/record with no closing newline.
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** One brainstorming technique, columns verbatim from brain-methods.csv. */
+export type BrainMethod = {
+  category: string;
+  name: string;
+  description: string;
+  detail: string;
+  provenance: string;
+  goodFor: string;
+  audience: string;
+};
+
+/**
+ * Parse the brain-methods CSV into rows, skipping the header and any blank /
+ * malformed record. `description` is kept verbatim (the technique's gist).
+ */
+export function parseBrainMethods(csv: string): BrainMethod[] {
+  const rows = parseCsv(csv);
+  if (rows.length <= 1) return [];
+  return rows
+    .slice(1) // header: category,technique_name,description,detail,provenance,good_for,audience
+    .filter((r) => r.length >= 3 && r[0].trim() && r[1].trim())
+    .map((r) => ({
+      category: r[0].trim(),
+      name: r[1].trim(),
+      description: r[2] ?? '',
+      detail: r[3] ?? '',
+      provenance: r[4] ?? '',
+      goodFor: r[5] ?? '',
+      audience: r[6] ?? '',
+    }));
+}
+
+let brainMethodsCache: BrainMethod[] | null = null;
+
+/** The full brainstorming catalog, read once per cold start. */
+export function getBrainMethods(): BrainMethod[] {
+  if (!brainMethodsCache) brainMethodsCache = parseBrainMethods(read(BRAIN_METHODS_CSV));
+  return brainMethodsCache;
 }
