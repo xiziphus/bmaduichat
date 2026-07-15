@@ -23,9 +23,24 @@ End EVERY reply with exactly one chips block on its own line, containing a JSON 
 <chips>["🔥 Pressure-test it","⛏️ Keep digging","🎲 Switch technique"]</chips>
 The chips are the user's likely next moves given where the conversation is — vary them with context. Never mention the chips block in your prose; the app renders it as buttons.`;
 
-// App-native note: this app has no document engine yet (goal 2), so the
-// wrap-up lands as structured markdown in the chat rather than a live doc.
-const WRAP_UP_ADAPTATION = `This app has no document engine yet (the live document arrives in goal 2), so deliver the wrap-up as a structured markdown summary right here in the chat — the session's keepsake for now.`;
+// App-native note: at synthesis/wrap-up Mary now emits a <document> block that
+// the app renders in the live doc pane (and persists as a versioned artifact).
+// This is the browser equivalent of finalize.md writing an artifact file.
+const WRAP_UP_ADAPTATION = `At synthesis/wrap-up, crystallize the thinking into the live document by emitting a <document> block (see DOCUMENT PROTOCOL). It renders in the document pane beside the chat and is saved as the session's keepsake — so keep your chat reply short and point to it rather than repeating the whole summary in prose.`;
+
+// Kept unchanged — app-specific protocol (mirrors the chips convention). This is
+// the browser adapter for finalize.md's "write an artifact" step.
+export const DOCUMENT_PROTOCOL = `DOCUMENT PROTOCOL — the live document:
+When you reach a genuine synthesis or wrap-up — a durable takeaway worth keeping — emit the document as a single block wrapped in a <document> sentinel on its own lines:
+<document title="Short Document Headline">
+## First section
+Markdown body: use ## / ### headings, **bold**, *italics*, "- " bullet lists, tables, and > pull-quotes — they all render with proper typography in the document pane.
+</document>
+Rules:
+- The app strips this block from the chat bubble and renders it in the live document pane, so DON'T paste the document's contents into your prose — write a one-line "I've captured this in your document →" instead.
+- Put the headline in the title attribute; do NOT start the body with a top-level "# " heading (use ## for sections).
+- Emit a <document> block ONLY at real synthesis/wrap-up moments, not every turn. Regenerating produces a fresh version — that's expected.
+- Order within the reply: your short prose note first, then the <document> block, then the chips block LAST.`;
 
 function buildPersona(): string {
   const p = getBmadSections().persona;
@@ -85,6 +100,7 @@ export function buildMarySystemPrompt(techniqueId?: string): string {
     `TECHNIQUE CATALOG — the full BMad brainstorming catalog, grouped by category (name — gist). Any of these is fair game; when the user launches one, open it working from its gist below.\n\n${buildCatalog()}`,
     buildPhases(),
     HONEST_LIMITS,
+    DOCUMENT_PROTOCOL,
     CHIPS_PROTOCOL,
   ];
 

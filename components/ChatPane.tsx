@@ -2,6 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { parseChips, visibleWhileStreaming } from '@/lib/chips';
+import {
+  parseDocument,
+  streamingDocumentBody,
+  streamingDocumentTitle,
+  stripDocumentForBubble,
+} from '@/lib/document';
+import Markdown from './Markdown';
 import { providerLabel, type Msg, type Provider } from '@/lib/llm';
 import { drawTwo, type Technique } from '@/lib/techniques';
 import {
@@ -10,6 +17,7 @@ import {
   type BuilderNote,
 } from '@/lib/builder-notes';
 import ModelToggle from './ModelToggle';
+import type { DocState } from './DocPane';
 
 type UiMessage = {
   id: string;
@@ -49,12 +57,14 @@ export default function ChatPane({
   conversationId = null,
   initialMessages = [],
   onExchange,
+  onDocument,
 }: {
   provider: Provider;
   onProviderChange: (p: Provider) => void;
   conversationId?: string | null;
   initialMessages?: InitialMessage[];
   onExchange?: () => void;
+  onDocument?: (doc: DocState) => void;
 }) {
   const [messages, setMessages] = useState<UiMessage[]>(() => seed(initialMessages));
   const [catalog, setCatalog] = useState<Technique[]>([]);
@@ -65,6 +75,9 @@ export default function ChatPane({
   const [notes, setNotes] = useState<BuilderNote[]>([]);
   const [notesOpen, setNotesOpen] = useState(false);
   const msgsRef = useRef<HTMLDivElement>(null);
+  // The last document reported to the parent this turn — lets the trailing
+  // artifact-id frame re-report the same doc with its persisted id attached.
+  const lastDocRef = useRef<DocState | null>(null);
 
   // Load the full catalog from the authed API (fs reads stay server-side), then
   // draw the initial random pair client-side so SSR/CSR markup match.
@@ -204,10 +217,26 @@ export default function ChatPane({
           const payload = chunk.slice(5).trim();
           if (!payload || payload === '[DONE]') continue;
           try {
-            const parsed = JSON.parse(payload) as { token?: string };
+            const parsed = JSON.parse(payload) as {
+              token?: string;
+              artifact?: { id?: string };
+            };
             if (parsed.token) {
               raw += parsed.token;
-              updatePlaceholder(visibleWhileStreaming(raw));
+              // Hide any <document>/<chips> tag from the live bubble.
+              updatePlaceholder(visibleWhileStreaming(stripDocumentForBubble(raw)));
+              // Stream the document into the doc pane as it grows.
+              const body = streamingDocumentBody(raw);
+              if (body !== null && onDocument) {
+                const doc: DocState = { title: streamingDocumentTitle(raw), body };
+                lastDocRef.current = doc;
+                onDocument(doc);
+              }
+            }
+            // Trailing frame from the server once the artifact row is written:
+            // re-report the finished doc with its persisted id.
+            if (parsed.artifact?.id && onDocument && lastDocRef.current) {
+              onDocument({ ...lastDocRef.current, artifactId: parsed.artifact.id });
             }
           } catch {
             // ignore unparseable frames
@@ -215,14 +244,23 @@ export default function ChatPane({
         }
       }
 
-      const { text, chips } = parseChips(raw);
-      if (!text && chips.length === 0) {
+      const { text: afterDoc, document } = parseDocument(raw);
+      const { text, chips } = parseChips(afterDoc);
+      if (!text && chips.length === 0 && !document) {
         // Zero tokens or a chips-only/blocked reply — never show a blank
         // bubble, never leak raw tag text.
         replaceWithError(
           `${providerLabel(provider)} returned an empty response — try again or switch model.`,
         );
         return;
+      }
+      // Finalize the doc pane with the complete body (no-DB path: this is the
+      // only place the document lands, and it persists for the session in
+      // parent state).
+      if (document && onDocument) {
+        const doc: DocState = { title: document.title, body: document.body };
+        lastDocRef.current = doc;
+        onDocument(doc);
       }
       finalizePlaceholder(text, chips);
       captureBuilderNotes(text);
@@ -337,8 +375,22 @@ export default function ChatPane({
         {messages.map((m) => (
           <div key={m.id}>
             <div className={`b ${m.error ? 'honest' : m.role === 'user' ? 'user' : 'mary'}`}>
-              {m.error && <b>⚠️ Honest note: </b>}
-              {m.content || (streaming && m.id === lastMessage?.id ? '…' : '')}
+              {m.error ? (
+                <>
+                  <b>⚠️ Honest note: </b>
+                  {m.content}
+                </>
+              ) : m.role === 'user' ? (
+                // User bubbles stay PLAIN text — no markdown surprises.
+                m.content
+              ) : m.content ? (
+                // Mary's bubbles render as sanitized markdown.
+                <Markdown className="md">{m.content}</Markdown>
+              ) : streaming && m.id === lastMessage?.id ? (
+                '…'
+              ) : (
+                ''
+              )}
             </div>
             {m.chips && m.chips.length > 0 && m.id === lastMessage?.id && (
               <div className="chips">

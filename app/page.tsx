@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Sidebar, { type ConversationSummary } from '@/components/Sidebar';
 import ChatPane, { type InitialMessage } from '@/components/ChatPane';
-import DocPane from '@/components/DocPane';
+import DocPane, { type DocState } from '@/components/DocPane';
 import Gutter from '@/components/Gutter';
 import type { Provider } from '@/lib/llm';
 
@@ -20,20 +20,26 @@ export default function Home() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<InitialMessage[]>([]);
   const [sessionKey, setSessionKey] = useState(0);
+  // The doc pane reflects the conversation's latest artifact, updated live as a
+  // wrap-up streams. Null → placeholder. In the no-DB path this is purely the
+  // current session's in-memory document.
+  const [doc, setDoc] = useState<DocState | null>(null);
 
   // Rehydrate a conversation's full thread into the chat pane.
   const openConversation = useCallback((id: string) => {
     setActiveId(id);
     fetch(`/api/conversations/${id}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('thread fetch failed'))))
-      .then((data: { messages?: InitialMessage[] }) => {
+      .then((data: { messages?: InitialMessage[]; artifact?: DocState | null }) => {
         setInitialMessages(data.messages ?? []);
+        setDoc(data.artifact ?? null); // latest saved document, or placeholder
         setSessionKey((k) => k + 1); // remount ChatPane so it seeds the thread
       })
       .catch(() => {
         // Missing/500 → drop the selection and refresh the list.
         setActiveId(null);
         setInitialMessages([]);
+        setDoc(null);
         void refreshList();
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,6 +97,7 @@ export default function Home() {
       // Ephemeral fallback: reset the in-tab session (today's behavior).
       setInitialMessages([]);
       setActiveId(null);
+      setDoc(null);
       setSessionKey((k) => k + 1);
       return;
     }
@@ -103,6 +110,7 @@ export default function Home() {
         setConversations((prev) => [c, ...prev]);
         setActiveId(c.id);
         setInitialMessages([]);
+        setDoc(null);
         setSessionKey((k) => k + 1);
       })
       .catch(() => {
@@ -114,6 +122,11 @@ export default function Home() {
   const onExchange = useCallback(() => {
     void refreshList();
   }, [refreshList]);
+
+  // Live document updates from the chat pane (streaming + finalized + persisted).
+  const onDocument = useCallback((next: DocState) => {
+    setDoc(next);
+  }, []);
 
   return (
     <div id="app" style={{ gridTemplateColumns: `${sideW}px 6px minmax(320px, 1fr) 6px ${docW}px` }}>
@@ -132,9 +145,10 @@ export default function Home() {
         conversationId={enabled ? activeId : null}
         initialMessages={initialMessages}
         onExchange={onExchange}
+        onDocument={onDocument}
       />
       <Gutter start={docW} min={320} max={760} dir={-1} onDrag={setDocW} />
-      <DocPane />
+      <DocPane doc={doc} />
     </div>
   );
 }

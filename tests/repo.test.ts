@@ -7,7 +7,12 @@ import {
   setArchived,
 } from '@/lib/repo/conversations';
 import { listMessages, appendMessage, buildAppendMessageQuery } from '@/lib/repo/messages';
-import { listArtifacts } from '@/lib/repo/artifacts';
+import {
+  listArtifacts,
+  createVersion,
+  getLatestForConversation,
+  getById,
+} from '@/lib/repo/artifacts';
 
 /** Records the last SQL text + params, returns a canned row set. */
 function mockExec(rows: unknown[] = []) {
@@ -106,12 +111,73 @@ describe('messages repo — SQL/param shape', () => {
   });
 });
 
-describe('artifacts repo — stub accessor', () => {
-  it('listArtifacts filters by conversation and returns rows', async () => {
+describe('artifacts repo — SQL/param shape', () => {
+  it('listArtifacts filters by conversation, newest version first', async () => {
     const { exec, calls } = mockExec([]);
     const out = await listArtifacts('c1', exec);
-    expect(norm(calls[0].text)).toContain('FROM artifacts');
+    const sql = norm(calls[0].text);
+    expect(sql).toContain('FROM artifacts');
+    expect(sql).toContain('WHERE conversation_id = $1');
+    expect(sql).toContain('ORDER BY version DESC');
     expect(calls[0].params).toEqual(['c1']);
     expect(out).toEqual([]);
+  });
+
+  it('createVersion inserts with an atomic MAX(version)+1 and RETURNING', async () => {
+    const row = { id: 'a1', version: 3 };
+    const { exec, calls } = mockExec([row]);
+    const out = await createVersion(
+      { conversationId: 'c1', title: 'T', markdown: '## body' },
+      exec,
+    );
+    const sql = norm(calls[0].text);
+    expect(sql).toContain('INSERT INTO artifacts (conversation_id, run_id, title, kind, markdown, html, version)');
+    expect(sql).toContain('COALESCE(MAX(version), 0) + 1');
+    expect(sql).toContain('WHERE conversation_id = $1');
+    expect(sql).toContain('RETURNING');
+    // kind defaults to 'document'; run_id + html default to null.
+    expect(calls[0].params).toEqual(['c1', null, 'T', 'document', '## body', null]);
+    expect(out).toEqual(row);
+  });
+
+  it('createVersion passes through explicit kind/html/runId/title', async () => {
+    const { exec, calls } = mockExec([{ id: 'a2' }]);
+    await createVersion(
+      {
+        conversationId: 'c1',
+        title: null,
+        markdown: 'x',
+        html: '<p>x</p>',
+        kind: 'summary',
+        runId: 'r9',
+      },
+      exec,
+    );
+    expect(calls[0].params).toEqual(['c1', 'r9', null, 'summary', 'x', '<p>x</p>']);
+  });
+
+  it('getLatestForConversation orders by version DESC LIMIT 1, null when none', async () => {
+    const { exec, calls } = mockExec([]);
+    const out = await getLatestForConversation('c1', exec);
+    const sql = norm(calls[0].text);
+    expect(sql).toContain('WHERE conversation_id = $1');
+    expect(sql).toContain('ORDER BY version DESC');
+    expect(sql).toContain('LIMIT 1');
+    expect(calls[0].params).toEqual(['c1']);
+    expect(out).toBeNull();
+  });
+
+  it('getLatestForConversation returns the row when present', async () => {
+    const row = { id: 'a1', conversation_id: 'c1', version: 2, markdown: 'm' };
+    const { exec } = mockExec([row]);
+    expect(await getLatestForConversation('c1', exec)).toEqual(row);
+  });
+
+  it('getById filters by id and returns null when absent', async () => {
+    const { exec, calls } = mockExec([]);
+    const out = await getById('a9', exec);
+    expect(norm(calls[0].text)).toContain('WHERE id = $1');
+    expect(calls[0].params).toEqual(['a9']);
+    expect(out).toBeNull();
   });
 });

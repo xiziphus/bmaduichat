@@ -137,6 +137,73 @@ input { font-family: inherit; }
 #paper .sig { margin-top: 26px; display: flex; align-items: center; gap: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; color: #a89bb5; letter-spacing: .08em; }
 #paper .sig::before, #paper .sig::after { content: ""; flex: 1; height: 1px; background: #efe6f7; }
 
+/* ================= MARKDOWN — CHAT BUBBLES =================
+   Mary's bubbles render sanitized markdown through <Markdown className="md">.
+   The bubble sets white-space: pre-wrap for plain user text; markdown reflows,
+   so reset it and give block elements sensible in-bubble spacing. */
+.b .md { white-space: normal; }
+.b .md > :first-child { margin-top: 0; }
+.b .md > :last-child { margin-bottom: 0; }
+.b .md p { margin: 0 0 8px; }
+.b .md strong { font-weight: 900; }
+.b .md em { font-style: italic; }
+.b .md a { color: var(--vio); text-decoration: underline; font-weight: 800; }
+.b .md h1, .b .md h2, .b .md h3, .b .md h4 { font-family: 'Fraunces', serif; font-weight: 700; color: var(--ink); margin: 10px 0 6px; line-height: 1.25; }
+.b .md h1 { font-size: 17px; }
+.b .md h2 { font-size: 15.5px; }
+.b .md h3, .b .md h4 { font-size: 14px; }
+.b .md ul, .b .md ol { margin: 4px 0 8px; padding-left: 20px; }
+.b .md li { margin-bottom: 3px; }
+.b .md code { font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: var(--vio-soft); color: var(--vio); border-radius: 4px; padding: 1px 5px; }
+.b .md pre { background: var(--vio-soft); border-radius: 10px; padding: 10px 12px; overflow: auto; margin: 8px 0; }
+.b .md pre code { background: none; padding: 0; }
+.b .md blockquote { border-left: 3px solid var(--coral); padding-left: 12px; margin: 8px 0; font-style: italic; color: #6b5f78; }
+.b .md table { border-collapse: collapse; margin: 8px 0; font-size: 12.5px; }
+.b .md th, .b .md td { border: 1px solid #e6dcf0; padding: 5px 9px; text-align: left; }
+.b .md th { background: var(--vio-soft); font-weight: 800; }
+.b .md img { max-width: 100%; border-radius: 8px; }
+
+/* ================= MARKDOWN — DOC PANE =================
+   Rendered artifact markdown mapped onto the mock's #paper typography. */
+#paper .docbody { white-space: normal; }
+#paper .docbody h1 { font-family: 'Fraunces', serif; font-weight: 900; font-size: 24px; line-height: 1.14; color: #2c2433; letter-spacing: -.01em; margin: 22px 0 8px; }
+#paper .docbody h2, #paper .docbody h3 { font-family: 'Fraunces', serif; font-weight: 700; font-size: 17px; color: #2c2433; margin: 24px 0 8px; }
+#paper .docbody h4 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 15px; color: #2c2433; margin: 18px 0 6px; }
+#paper .docbody p { font-family: 'Newsreader', serif; font-size: 14.5px; line-height: 1.75; color: #4a4152; margin-bottom: 10px; }
+#paper .docbody strong { font-weight: 700; color: #2c2433; }
+#paper .docbody em { font-style: italic; }
+#paper .docbody a { color: var(--vio); text-decoration: underline; }
+#paper .docbody blockquote { font-family: 'Fraunces', serif; font-style: italic; font-weight: 600; font-size: 18.5px; line-height: 1.4; color: #2c2433; border-left: 4px solid var(--coral); padding: 6px 0 6px 18px; margin: 18px 0; }
+#paper .docbody blockquote p { font-family: inherit; font-size: inherit; color: inherit; margin: 0; }
+#paper .docbody ul { margin: 6px 0 12px 4px; list-style: none; }
+#paper .docbody ul li { font-family: 'Newsreader', serif; font-size: 14px; line-height: 1.7; color: #4a4152; padding-left: 24px; position: relative; margin-bottom: 5px; }
+#paper .docbody ul li::before { content: "\25C6"; position: absolute; left: 4px; color: var(--coral); font-size: 9px; top: 7px; }
+#paper .docbody ol { margin: 6px 0 12px; padding-left: 22px; }
+#paper .docbody ol li { font-family: 'Newsreader', serif; font-size: 14px; line-height: 1.7; color: #4a4152; margin-bottom: 5px; }
+#paper .docbody table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-family: 'Nunito'; }
+#paper .docbody th { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: #a89bb5; text-align: left; padding: 7px 10px; border-bottom: 2px solid #efe6f7; }
+#paper .docbody td { font-size: 13px; font-weight: 700; color: #4a4152; padding: 9px 10px; border-bottom: 1px solid #f4eef8; }
+#paper .docbody code { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; background: var(--vio-soft); color: var(--vio); border-radius: 4px; padding: 1px 5px; }
+#paper .docbody pre { background: var(--vio-soft); border-radius: 10px; padding: 12px 14px; overflow: auto; margin: 12px 0; }
+#paper .docbody pre code { background: none; padding: 0; }
+#paper .docbody img { max-width: 100%; border-radius: 10px; }
+
+/* doc header actions are real buttons now — full opacity + hover, disabled dims */
+#docpane .dhdr .act { opacity: 1; border: none; }
+#docpane .dhdr .act:disabled { opacity: .45; cursor: default; }
+#docpane .dhdr a.act { text-decoration: none; display: inline-block; }
+
+/* ================= PRINT — isolate the doc pane =================
+   Copy → clipboard; PDF → window.print(). This stylesheet hides everything
+   except the document so the PDF is a clean page of just the artifact. */
+@media print {
+  html, body { height: auto; overflow: visible; background: #fff; }
+  #app { position: static; display: block; height: auto; }
+  #side, .gutter, #chat, #docpane .dhdr { display: none !important; }
+  #docpane { display: block; margin: 0; }
+  #paper { box-shadow: none; border-radius: 0; overflow: visible; padding: 0; background: #fff; }
+}
+
 /* ================= LOGIN ================= */
 /* body is overflow:hidden for the app grid — the login view scrolls on its own
    so the card never clips on short viewports. */

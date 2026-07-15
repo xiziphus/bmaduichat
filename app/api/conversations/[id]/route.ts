@@ -3,6 +3,7 @@ import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
 import { isPersistenceEnabled } from '@/lib/db';
 import { getConversation, setArchived } from '@/lib/repo/conversations';
 import { listMessages } from '@/lib/repo/messages';
+import { getLatestForConversation } from '@/lib/repo/artifacts';
 
 // DB access → Node runtime.
 export const runtime = 'nodejs';
@@ -30,7 +31,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     const messages = await listMessages(id);
-    return NextResponse.json({ enabled: true, conversation, messages });
+    // Latest saved document (if any) → doc pane rehydrates on reopen/refresh.
+    const latest = await getLatestForConversation(id);
+    const artifact =
+      latest && latest.markdown
+        ? { title: latest.title, body: latest.markdown, artifactId: latest.id }
+        : null;
+    return NextResponse.json({ enabled: true, conversation, messages, artifact });
   } catch (err) {
     console.error('[conversations] thread failed', err instanceof Error ? err.name : typeof err);
     return NextResponse.json({ enabled: false, messages: [] });

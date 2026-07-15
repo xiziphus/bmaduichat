@@ -4,7 +4,9 @@ import { buildMarySystemPrompt } from '@/lib/mary';
 import { streamChat, ProviderError, providerLabel, type Msg, type Provider } from '@/lib/llm';
 import { isPersistenceEnabled, transaction } from '@/lib/db';
 import { buildAppendMessageQuery } from '@/lib/repo/messages';
+import { createVersion } from '@/lib/repo/artifacts';
 import { parseChips } from '@/lib/chips';
+import { parseDocument } from '@/lib/document';
 
 export const runtime = 'nodejs';
 
@@ -101,23 +103,40 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
       },
       async flush(controller) {
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        if (!persist || userTurn === undefined || conversationId === undefined) return;
-        const { text, chips } = parseChips(assistantRaw);
-        if (!text && chips.length === 0) return; // empty reply → persist nothing
-        try {
-          await transaction([
-            buildAppendMessageQuery({ conversationId, role: 'user', content: userTurn }),
-            buildAppendMessageQuery({ conversationId, role: 'assistant', content: text, chips }),
-          ]);
-        } catch (err) {
-          // DB failure must never surface to the client — the reply already
-          // streamed. Log and move on.
-          console.error(
-            '[chat] persist turn failed',
-            err instanceof Error ? err.name : err,
-          );
+        if (persist && userTurn !== undefined && conversationId !== undefined) {
+          // Strip the <document> block first, then chips, so the persisted chat
+          // bubble carries neither tag. A wrap-up turn yields both a chat reply
+          // and a durable document; each is stored in its own place.
+          const { text: afterDoc, document } = parseDocument(assistantRaw);
+          const { text, chips } = parseChips(afterDoc);
+          try {
+            if (text || chips.length > 0) {
+              await transaction([
+                buildAppendMessageQuery({ conversationId, role: 'user', content: userTurn }),
+                buildAppendMessageQuery({ conversationId, role: 'assistant', content: text, chips }),
+              ]);
+            }
+            if (document) {
+              // New version row — prior versions retained (regenerate keeps history).
+              const artifact = await createVersion({
+                conversationId,
+                title: document.title,
+                markdown: document.body,
+              });
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ artifact: { id: artifact.id } })}\n\n`),
+              );
+            }
+          } catch (err) {
+            // DB failure must never surface to the client — the reply already
+            // streamed. Log and move on.
+            console.error(
+              '[chat] persist turn failed',
+              err instanceof Error ? err.name : err,
+            );
+          }
         }
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       },
     }),
   );
