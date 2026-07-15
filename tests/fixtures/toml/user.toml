@@ -1,0 +1,12 @@
+# User overrides (highest priority).
+enabled = true
+count = 42
+tags = ["user1"]
+
+[settings]
+theme = "dark"
+
+# replace code A only
+[[menu]]
+code = "A"
+description = "user A"

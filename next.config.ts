@@ -11,9 +11,16 @@ const nextConfig: NextConfig = {
   // fs.readFileSync paths, so bundle them into the /api/chat function
   // explicitly or they won't exist on Vercel.
   outputFileTracingIncludes: {
+    // The generic skill loader (lib/skills/*) + Mary's prompt read skill files
+    // from .claude/skills at runtime; Next's tracer can't see the fs.readFileSync
+    // paths, so ship the whole skills tree into the chat function. The two
+    // specific entries below are a redundant safety net (covered by the glob).
     '/api/chat': [
+      './.claude/skills/**',
       './.claude/skills/bmad-agent-analyst/customize.toml',
       './.claude/skills/bmad-brainstorming/**',
+      // Merged customization can pull team/user overrides from _bmad/custom.
+      './_bmad/custom/**',
     ],
     // The techniques catalog reads brain-methods.csv at runtime; ship it into
     // this function too (the tracer can't see the fs.readFileSync path).

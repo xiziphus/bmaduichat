@@ -1,0 +1,30 @@
+# Team overrides.
+title = "Team Title"
+tags = ["team1"]
+
+[settings]
+retries = 5
+
+[settings.nested]
+depth = 2
+
+# replace code B, append code C
+[[menu]]
+code = "B"
+description = "team B"
+
+[[menu]]
+code = "C"
+description = "team C"
+
+# replace id x, append id y
+[[items]]
+id = "x"
+value = "team-x"
+
+[[items]]
+id = "y"
+value = "team-y"
+
+[[notes]]
+text = "team note"

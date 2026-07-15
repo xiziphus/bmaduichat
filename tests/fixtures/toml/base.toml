@@ -1,0 +1,33 @@
+# Base skill defaults — exercises every merge rule.
+# NOTE: top-level keys come BEFORE any [[table]] — in TOML, bare keys after a
+# table header belong to that table, so keep scalars/arrays up top.
+title = "Base Title"
+count = 1
+enabled = false
+tags = ["base1", "base2"]   # plain scalar array -> append
+
+[settings]
+theme = "light"
+retries = 3
+
+[settings.nested]
+depth = 1
+keep = "base-only"
+
+# code-keyed array of tables -> replace-matching + append-new
+[[menu]]
+code = "A"
+description = "base A"
+
+[[menu]]
+code = "B"
+description = "base B"
+
+# id-keyed array of tables -> replace-matching + append-new
+[[items]]
+id = "x"
+value = "base-x"
+
+# array of tables with NO shared key -> append
+[[notes]]
+text = "base note"
