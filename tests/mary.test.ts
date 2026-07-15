@@ -54,6 +54,12 @@ describe('buildMarySystemPrompt', () => {
     expect(prompt).toContain('<chips>[');
   });
 
+  it('strips BMad mechanics that do not exist in this app', () => {
+    expect(prompt).not.toContain('memlog.py');
+    expect(prompt).not.toContain('uv run');
+    expect(prompt).not.toContain('{project-root}');
+  });
+
   it('injects the current technique launch prompt when given', () => {
     const t = TECHNIQUES[0];
     const withTechnique = buildMarySystemPrompt(t.id);
