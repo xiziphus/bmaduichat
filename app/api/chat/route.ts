@@ -8,8 +8,12 @@ import {
   modelForProvider,
   type ChatStream,
   type Msg,
+  type MsgPart,
   type Provider,
 } from '@/lib/llm';
+import { runWorkflow } from '@/lib/runtime/engine';
+import { BRAINSTORMING_SLUG } from '@/lib/runtime/brainstorming';
+import type { ToolMsg } from '@/lib/runtime/types';
 import { isPersistenceEnabled, transaction } from '@/lib/db';
 import { buildAppendMessageQuery } from '@/lib/repo/messages';
 import type { AttachmentMeta } from '@/lib/attachments';
@@ -91,6 +95,174 @@ function isMsg(m: unknown): m is ChatMessage {
   );
 }
 
+/** Map the posted chat history into the engine's canonical `ToolMsg[]`. */
+function toEngineHistory(msgs: ChatMessage[]): ToolMsg[] {
+  return msgs.map((m) =>
+    m.role === 'user'
+      ? { role: 'user', content: m.content, ...(m.parts && m.parts.length ? { parts: m.parts } : {}) }
+      : { role: 'assistant', content: m.content },
+  );
+}
+
+type EngineChatParams = {
+  provider: Provider;
+  model: string;
+  free: boolean;
+  /** Full history for this request, @-references already injected. */
+  messages: ChatMessage[];
+  technique?: string;
+  conversationId?: string;
+  persist: boolean;
+  userTurn?: string;
+  userAttachments?: AttachmentMeta[];
+};
+
+/**
+ * The PLAYGROUND_ENGINE path: route the brainstorming conversation through the
+ * runtime engine (runWorkflow) instead of the hardcoded Mary prompt. It resumes
+ * the conversation's active workflow_run when one is awaiting_user (state.ts),
+ * else starts a fresh one seeded with the prior turns. Text/chips/<document> are
+ * re-encoded as the SAME `{ token }` / `{ artifact }` SSE frames the hardcoded
+ * path emits, so the client renders them with no change; a HALT adds an
+ * `{ awaiting }` frame for the "Mary is waiting on you" affordance.
+ *
+ * Persistence (messages), usage metering, and builder-note capture mirror the
+ * hardcoded flush so budget/notes/attachments/@refer keep working on this path.
+ * On any engine failure the stream still closes with an honest, visible bubble —
+ * never a blank.
+ */
+function engineChatResponse(params: EngineChatParams): Response {
+  const { provider, model, free, messages, technique, conversationId, persist } = params;
+  const meter = isPersistenceEnabled();
+  // Only drive the DB-backed run store when we have a real conversation to bind
+  // it to; otherwise the engine runs a single, unpersisted session.
+  const enginePersistence = isPersistenceEnabled() && conversationId !== undefined;
+  const engineConvId = conversationId ?? 'ephemeral';
+
+  const last = messages[messages.length - 1];
+  const input = last?.content ?? '';
+  const inputParts: MsgPart[] | undefined =
+    last?.role === 'user' && last.parts && last.parts.length > 0 ? last.parts : undefined;
+  const history = toEngineHistory(messages.slice(0, -1));
+  const promptText = meter ? messages.map((m) => m.content).join('\n') : '';
+
+  const encoder = new TextEncoder();
+  const send = (obj: unknown) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let assistantRaw = '';
+      let awaitingRunId: string | null | undefined;
+      let errored = false;
+
+      try {
+        for await (const ev of runWorkflow({
+          conversationId: engineConvId,
+          skillSlug: BRAINSTORMING_SLUG,
+          input,
+          inputParts,
+          history,
+          technique,
+          provider,
+          model,
+          deps: { persistence: enginePersistence },
+        })) {
+          if (ev.type === 'text') {
+            assistantRaw += ev.delta;
+            controller.enqueue(send({ token: ev.delta }));
+          } else if (ev.type === 'checkpoint') {
+            // The HALT question is Mary's user-facing turn — stream it as text.
+            if (ev.prompt) {
+              assistantRaw += ev.prompt;
+              controller.enqueue(send({ token: ev.prompt }));
+            }
+            awaitingRunId = ev.runId;
+          } else if (ev.type === 'error') {
+            errored = true;
+            if (!assistantRaw) {
+              assistantRaw = ev.message;
+              controller.enqueue(send({ token: ev.message }));
+            }
+          }
+          // progress/tool/tool_result/done → not surfaced into the bubble.
+        }
+      } catch (err) {
+        console.error('[chat] engine run failed', err instanceof Error ? err.name : typeof err);
+        errored = true;
+        if (!assistantRaw) {
+          const msg = `${providerLabel(provider)} hit a snag — try again or switch model.`;
+          assistantRaw = msg;
+          controller.enqueue(send({ token: msg }));
+        }
+      }
+
+      // Flush: mirror the hardcoded path — parse once, persist the turn, version
+      // any <document>, meter the call, and capture builder notes.
+      const { text: afterDoc, document } = meter
+        ? parseDocument(assistantRaw)
+        : { text: '', document: undefined };
+      const { text, chips } = meter ? parseChips(afterDoc) : { text: '', chips: [] as string[] };
+
+      if (!errored && persist && params.userTurn !== undefined && conversationId !== undefined) {
+        try {
+          if (text || chips.length > 0) {
+            await transaction([
+              buildAppendMessageQuery({
+                conversationId,
+                role: 'user',
+                content: params.userTurn,
+                attachments: params.userAttachments,
+              }),
+              buildAppendMessageQuery({ conversationId, role: 'assistant', content: text, chips }),
+            ]);
+          }
+          if (document) {
+            const artifact = await createVersion({
+              conversationId,
+              title: document.title,
+              markdown: document.body,
+            });
+            controller.enqueue(send({ artifact: { id: artifact.id } }));
+          }
+        } catch (err) {
+          console.error('[chat] engine persist turn failed', err instanceof Error ? err.name : err);
+        }
+      }
+
+      if (meter && !errored) {
+        if (!free) {
+          try {
+            const tokensIn = tokensOrEstimate(null, promptText);
+            const tokensOut = tokensOrEstimate(null, assistantRaw);
+            const costEst = estimateCost({ provider, model, tokensIn, tokensOut });
+            await insertUsage({ provider, model, tokensIn, tokensOut, costEst });
+          } catch (err) {
+            console.error('[chat] engine usage write failed', err instanceof Error ? err.name : typeof err);
+          }
+        }
+        try {
+          const excerpts = extractBuilderNotes(text);
+          for (const excerpt of excerpts) {
+            await insertBuilderNote({ conversationId: conversationId ?? null, excerpt });
+          }
+        } catch (err) {
+          console.error('[chat] engine builder-note write failed', err instanceof Error ? err.name : typeof err);
+        }
+      }
+
+      // Signal the awaiting_user checkpoint AFTER the turn so the client can show
+      // the "Mary is waiting on you" affordance.
+      if (awaitingRunId !== undefined) {
+        controller.enqueue(send({ awaiting: { runId: awaitingRunId } }));
+      }
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  });
+
+  return new Response(stream, { headers: SSE_HEADERS });
+}
+
 export async function POST(req: NextRequest) {
   const cookie = req.cookies.get(AUTH_COOKIE)?.value;
   if (!(await verifyAuthCookie(cookie, process.env.AUTH_SECRET))) {
@@ -164,6 +336,24 @@ export async function POST(req: NextRequest) {
       // Fail OPEN — a metering hiccup must never block chat.
       console.error('[chat] cap check failed', err instanceof Error ? err.name : typeof err);
     }
+  }
+
+  // Flag-gated engine path. Default (unset/off) falls straight through to the
+  // hardcoded Mary path below — byte-identical to today. Only when
+  // PLAYGROUND_ENGINE=on does the brainstorming conversation run through the
+  // runtime engine (with usage/budget/notes/attachments/@refer preserved).
+  if (process.env.PLAYGROUND_ENGINE === 'on') {
+    return engineChatResponse({
+      provider: provider as Provider,
+      model,
+      free,
+      messages: modelMessages,
+      technique,
+      conversationId,
+      persist,
+      userTurn,
+      userAttachments,
+    });
   }
 
   let chat: ChatStream;

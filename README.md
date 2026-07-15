@@ -18,6 +18,7 @@ no accounts, no persistence beyond the current browser tab in this first slice.
 | `OPENROUTER_MULTIMODAL` | no | `false` | Force image/PDF support on for OpenRouter. See [Attachments](#attachments-images-pdfs-docs--voice). |
 | `DATABASE_URL` | no (optional) | — | Neon Postgres connection string. **Unset → the app runs exactly as before** (ephemeral, in-tab conversations). Set + migrated → conversations and history persist. |
 | `BUDGET_USD` | no | `10` | Monthly spend cap (USD). A safety net, not accounting — cost is **estimated** from a small per-model price table. Requires `DATABASE_URL`; with no DB there's no metering or cap. |
+| `PLAYGROUND_ENGINE` | no | *(off)* | **Experimental.** Unset/off → the brainstorming chat uses the hardcoded Mary prompt (the default, unchanged). Set to `on` → the same conversation runs through the **runtime engine** (`lib/runtime/*`), executing the real `bmad-brainstorming` SKILL.md instead. See [Runtime engine](#runtime-engine-experimental). |
 
 ## Budget cap (optional, requires a database)
 
@@ -31,6 +32,24 @@ final-chunk `usage`) or a ~4-chars/token fallback — treat it as a guardrail, n
 - At **100%**, a billable request is **blocked** with an honest bubble suggesting a free model.
 - **Free OpenRouter models** (id ending `:free`) are never counted and **always work**, even at 100%.
 - Unknown/untabled models cost 0, so they never block.
+
+## Runtime engine (experimental)
+
+By default, Mary's brainstorming prompt is composed by `lib/mary.ts` (the "hardcoded" path)
+and streamed straight from the provider. Setting `PLAYGROUND_ENGINE=on` instead routes the
+brainstorming conversation through the **runtime engine** (`lib/runtime/*` — `runWorkflow`),
+which executes the actual `bmad-brainstorming` `SKILL.md` (adapted for the browser) with one
+documented adapter layered on top: the shared **app-protocol block** (`APP_PROTOCOLS` in
+`lib/mary.ts` — chips, `<document>`, honest-limits, attachments, `@refer`). Mary's
+persona/framing/stance come from the loaded BMad files, not hand-written copy.
+
+- **Off (default):** the app is byte-identical to today. Nothing about the chat changes.
+- **On:** the same chat runs through the engine. Chips, the technique buttons, the document
+  pane, markdown, attachments, `@refer`, and the budget meter all still work. A checkpoint
+  (the engine HALTing to wait for you) shows a light "Mary is waiting on you" affordance.
+
+The flag ships **off**; flip it only after an in-browser parity pass. With a database
+configured, the engine persists resumable run state to `workflow_runs` (cross-session).
 
 ## Builder notes outbox
 

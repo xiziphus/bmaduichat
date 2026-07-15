@@ -166,7 +166,7 @@ export type ToolCall = {
  *  - a `tool` turn carrying one tool's result (echoed back to the model)
  */
 export type ToolMsg =
-  | { role: 'user'; content: string }
+  | { role: 'user'; content: string; parts?: MsgPart[] }
   | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
   | { role: 'tool'; toolCallId: string; name: string; content: string };
 
@@ -217,7 +217,10 @@ export function supportsFunctionCalling(provider: Provider, model?: string): boo
 /** Serialize the canonical transcript into Gemini `contents[]`. */
 export function toGeminiContents(messages: ToolMsg[]): unknown[] {
   return messages.map((m) => {
-    if (m.role === 'user') return { role: 'user', parts: [{ text: m.content }] };
+    // Reuse the plain-chat serializer so multimodal parts (images/PDFs) ride the
+    // engine transcript identically to the hardcoded path. No parts → byte-
+    // identical `[{ text }]`.
+    if (m.role === 'user') return { role: 'user', parts: geminiParts(m) };
     if (m.role === 'tool') {
       return {
         role: 'user',
@@ -236,7 +239,9 @@ export function toGeminiContents(messages: ToolMsg[]): unknown[] {
 /** Serialize the canonical transcript into OpenRouter (OpenAI-compat) messages. */
 export function toOpenRouterMessages(messages: ToolMsg[]): unknown[] {
   return messages.map((m) => {
-    if (m.role === 'user') return { role: 'user', content: m.content };
+    // Reuse the plain-chat serializer so multimodal parts ride the engine
+    // transcript. No parts → byte-identical `{ role, content: string }`.
+    if (m.role === 'user') return openRouterMessage(m);
     if (m.role === 'tool') {
       return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
     }

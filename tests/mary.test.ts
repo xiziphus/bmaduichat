@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMarySystemPrompt } from '@/lib/mary';
+import { buildMarySystemPrompt, APP_PROTOCOLS } from '@/lib/mary';
 import { getTechniques, getTechnique } from '@/lib/techniques-catalog';
 
 describe('buildMarySystemPrompt', () => {
@@ -65,6 +65,17 @@ describe('buildMarySystemPrompt', () => {
     expect(prompt).toContain('Lotus Blossom');
     // Sentinel gist string, verbatim from brain-methods.csv.
     expect(prompt).toContain('Put the theme at the center of a 3x3 grid');
+  });
+
+  it('APP_PROTOCOLS holds every app-protocol block and is embedded verbatim in the prompt', () => {
+    // The extracted constant carries all five app-native protocol blocks…
+    expect(APP_PROTOCOLS).toContain('HONEST LIMITS');
+    expect(APP_PROTOCOLS).toContain('ATTACHMENTS');
+    expect(APP_PROTOCOLS).toContain('REFERENCED MATERIAL');
+    expect(APP_PROTOCOLS).toContain('DOCUMENT PROTOCOL');
+    expect(APP_PROTOCOLS).toContain('CHIPS PROTOCOL');
+    // …and the hardcoded prompt still embeds it byte-for-byte (pure refactor).
+    expect(prompt).toContain(APP_PROTOCOLS);
   });
 
   it('injects the current technique framing (gist, no launchPrompt) when given', () => {

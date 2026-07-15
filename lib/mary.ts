@@ -105,6 +105,38 @@ function buildCatalog(): string {
   return blocks.join('\n\n');
 }
 
+/**
+ * The app-protocol block: the browser-native rules Mary follows that are NOT
+ * BMad source — honest-limits, the attachments note, the @-reference protocol,
+ * the <document> protocol, and the chips protocol. Extracted here so BOTH the
+ * hardcoded Mary path AND the runtime engine (lib/runtime/brainstorming.ts)
+ * compose the EXACT same protocol text on top of the loaded skill.
+ *
+ * Ordering is load-bearing: joined with '\n\n' in the same order the hardcoded
+ * prompt used, so slotting this single constant into buildMarySystemPrompt's
+ * section list keeps that prompt byte-identical ('\n\n'.join is associative).
+ */
+export const APP_PROTOCOLS = [
+  HONEST_LIMITS,
+  ATTACHMENTS_NOTE,
+  REFERENCES_PROTOCOL,
+  DOCUMENT_PROTOCOL,
+  CHIPS_PROTOCOL,
+].join('\n\n');
+
+/**
+ * The CURRENT-TECHNIQUE injection for a just-launched technique, or undefined if
+ * the id is unknown. Shared by the hardcoded path and the runtime composer so a
+ * technique launch reads identically on both.
+ */
+export function techniqueInjection(techniqueId: string): string | undefined {
+  const technique = getTechnique(techniqueId);
+  if (!technique) return undefined;
+  return `CURRENT TECHNIQUE — the user just launched "${technique.name}".
+Open ${technique.name} now, working from its catalog gist: ${technique.gist}
+Give at most a one-line framing of the lens, then your first question. Facilitate rather than lecture — no menus, no explaining the whole method up front.`;
+}
+
 export function buildMarySystemPrompt(techniqueId?: string): string {
   const b = getBmadSections();
 
@@ -115,19 +147,11 @@ export function buildMarySystemPrompt(techniqueId?: string): string {
     `KICKOFF — starting a session:\n${b.kickoff}`,
     `TECHNIQUE CATALOG — the full BMad brainstorming catalog, grouped by category (name — gist). Any of these is fair game; when the user launches one, open it working from its gist below.\n\n${buildCatalog()}`,
     buildPhases(),
-    HONEST_LIMITS,
-    ATTACHMENTS_NOTE,
-    REFERENCES_PROTOCOL,
-    DOCUMENT_PROTOCOL,
-    CHIPS_PROTOCOL,
+    APP_PROTOCOLS,
   ];
 
-  const technique = techniqueId ? getTechnique(techniqueId) : undefined;
-  if (technique) {
-    sections.push(`CURRENT TECHNIQUE — the user just launched "${technique.name}".
-Open ${technique.name} now, working from its catalog gist: ${technique.gist}
-Give at most a one-line framing of the lens, then your first question. Facilitate rather than lecture — no menus, no explaining the whole method up front.`);
-  }
+  const injection = techniqueId ? techniqueInjection(techniqueId) : undefined;
+  if (injection) sections.push(injection);
 
   return sections.join('\n\n');
 }

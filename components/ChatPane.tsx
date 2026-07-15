@@ -150,6 +150,10 @@ export default function ChatPane({
   const [activeTechnique, setActiveTechnique] = useState<Technique | undefined>(undefined);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  // Set only by the runtime-engine path (PLAYGROUND_ENGINE on) when a run HALTs
+  // awaiting the user. Off by default — the hardcoded path never emits it, so
+  // this affordance never appears in the default app.
+  const [awaiting, setAwaiting] = useState(false);
   const [notes, setNotes] = useState<BuilderNote[]>([]);
   const [notesOpen, setNotesOpen] = useState(false);
   // Server-backed builder-notes outbox (DB on). `null` = not in server mode, so
@@ -380,6 +384,7 @@ export default function ChatPane({
 
   async function runChat(history: UiMessage[], technique?: string, refs: Reference[] = []) {
     setStreaming(true);
+    setAwaiting(false);
     const placeholderId = nextId();
     setMessages([...history, { id: placeholderId, role: 'assistant', content: '' }]);
 
@@ -443,7 +448,10 @@ export default function ChatPane({
             const parsed = JSON.parse(payload) as {
               token?: string;
               artifact?: { id?: string };
+              awaiting?: { runId?: string | null };
             };
+            // Engine-only (PLAYGROUND_ENGINE): the run HALTed awaiting the user.
+            if (parsed.awaiting) setAwaiting(true);
             if (parsed.token) {
               raw += parsed.token;
               // Hide any <document>/<chips> tag from the live bubble.
@@ -910,6 +918,12 @@ export default function ChatPane({
           >
             🎲 show me others
           </button>
+        </div>
+      )}
+
+      {awaiting && !streaming && (
+        <div className="awaiting" role="status">
+          ⏸ Mary is waiting on you — reply below to pick things back up.
         </div>
       )}
 

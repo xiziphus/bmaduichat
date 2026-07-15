@@ -12,21 +12,39 @@ import 'server-only';
  */
 import { isPersistenceEnabled } from '@/lib/db';
 import { loadSkill, adaptMechanics } from '@/lib/skills/loader';
-import { supportsFunctionCalling, type Provider } from '@/lib/llm';
+import { supportsFunctionCalling, type Provider, type MsgPart } from '@/lib/llm';
 import type { ModelClient, ToolExecutor, RunEvent, RunState, ToolMsg, RunStore } from './types';
 import { runLoop, structuredToolInstructions } from './loop';
 import { TOOL_SCHEMAS, createToolExecutor } from './tools';
 import { makeProviderClient } from './model';
 import { dbRunStore, STALE_APOLOGY } from './state';
+import {
+  BRAINSTORMING_SLUG,
+  composeBrainstormingPrompt,
+  type BrainstormPhase,
+} from './brainstorming';
 
 export type RunWorkflowInput = {
   conversationId: string;
   skillSlug: string;
   /** The user's message this turn (a fresh prompt, or the answer resuming a checkpoint). */
   input: string;
+  /** Provider-native multimodal parts (images/PDFs) attached to THIS turn. */
+  inputParts?: MsgPart[];
   provider: Provider;
   model?: string;
   resumeRunId?: string;
+  /**
+   * Seed context for a FRESH run (no resumable run in the DB): the prior
+   * conversation turns, so multi-turn context survives even when each turn
+   * finalizes. Ignored on resume (the persisted transcript is the source of
+   * truth). The current turn is always `input`, appended after this.
+   */
+  history?: ToolMsg[];
+  /** A just-launched technique id — folded into a fresh run's system prompt. */
+  technique?: string;
+  /** The active brainstorming phase (drives reference selection on a fresh run). */
+  phase?: BrainstormPhase;
   /** Injectables for tests / alternate transports. */
   deps?: {
     model?: ModelClient;
@@ -43,10 +61,19 @@ export type RunWorkflowInput = {
  * Build the run's system prompt from the skill (RAW SKILL.md adapted for the
  * browser) plus, in fallback mode, the structured-text tool protocol.
  */
-export function buildSystemPrompt(skillSlug: string, supportsTools: boolean): string {
+export function buildSystemPrompt(
+  skillSlug: string,
+  supportsTools: boolean,
+  opts?: { technique?: string; phase?: BrainstormPhase },
+): string {
   let skillText = '';
   try {
-    skillText = adaptMechanics(loadSkill(skillSlug).skillMd);
+    // Brainstorming gets the dedicated composer (skill + phase refs + the shared
+    // APP_PROTOCOLS block); every other skill uses the generic adapted SKILL.md.
+    skillText =
+      skillSlug === BRAINSTORMING_SLUG
+        ? composeBrainstormingPrompt({ technique: opts?.technique, phase: opts?.phase })
+        : adaptMechanics(loadSkill(skillSlug).skillMd);
   } catch {
     skillText = `You are running the "${skillSlug}" skill.`;
   }
@@ -89,10 +116,20 @@ export async function* runWorkflow(
 
   // Build system + seed transcript. Resume re-enters with the persisted stack +
   // the user's answer appended; a fresh run starts from the user's input.
-  const system = resume?.system ?? buildSystemPrompt(opts.skillSlug, supportsTools);
+  const system =
+    resume?.system ??
+    buildSystemPrompt(opts.skillSlug, supportsTools, {
+      technique: opts.technique,
+      phase: opts.phase,
+    });
+  const currentTurn: ToolMsg = {
+    role: 'user',
+    content: opts.input,
+    ...(opts.inputParts && opts.inputParts.length > 0 ? { parts: opts.inputParts } : {}),
+  };
   const transcript: ToolMsg[] = resume
-    ? [...resume.transcript, { role: 'user', content: opts.input }]
-    : [{ role: 'user', content: opts.input }];
+    ? [...resume.transcript, currentTurn]
+    : [...(opts.history ?? []), currentTurn];
 
   // If we resumed a stale-healed run that never actually checkpointed, apologize.
   if (resume && resume.pendingPrompt === null && resume.transcript.length > 0) {
