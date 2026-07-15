@@ -40,6 +40,24 @@ import { activeMentionQuery, stripRange, type Reference } from '@/lib/mentions';
 /** One autocomplete row from GET /api/references. */
 type MentionItem = { type: 'conversation' | 'artifact'; id: string; title: string };
 
+/** A builder note as stored server-side (GET /api/builder-notes). */
+type ServerNote = {
+  id: string;
+  conversation_id: string | null;
+  excerpt: string;
+  status: 'collected' | 'sent';
+  created: string;
+};
+
+/** Month-to-date budget snapshot (GET /api/usage). */
+type BudgetState = {
+  enabled: boolean;
+  spent: number;
+  cap: number;
+  ratio: number;
+  level: 'ok' | 'warn' | 'blocked';
+};
+
 type UiMessage = {
   id: string;
   role: 'user' | 'assistant';
@@ -134,6 +152,15 @@ export default function ChatPane({
   const [streaming, setStreaming] = useState(false);
   const [notes, setNotes] = useState<BuilderNote[]>([]);
   const [notesOpen, setNotesOpen] = useState(false);
+  // Server-backed builder-notes outbox (DB on). `null` = not in server mode, so
+  // the 📮 drawer falls back to the localStorage `notes` above.
+  const [serverNotes, setServerNotes] = useState<ServerNote[] | null>(null);
+  const [notesView, setNotesView] = useState<'collected' | 'sent'>('collected');
+  const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
+  // Month-to-date budget for the header meter (DB on). `null` while loading /
+  // when metering is off (meter stays hidden).
+  const [budget, setBudget] = useState<BudgetState | null>(null);
+  const warnedRef = useRef(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [recording, setRecording] = useState(false);
   const [support, setSupport] = useState<SupportMap>(DEFAULT_SUPPORT);
@@ -233,7 +260,54 @@ export default function ChatPane({
     setPair(drawTwo(catalog, pair.map((t) => t.id)));
   }
 
+  // Month-to-date budget for the meter. Also fires a one-time warning toast the
+  // first time spend crosses 80% (free models never count, so it never nags).
+  function loadBudget() {
+    fetch('/api/usage')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: BudgetState | null) => {
+        if (!d) return;
+        setBudget(d);
+        if (d.enabled && d.level === 'warn' && !warnedRef.current) {
+          warnedRef.current = true;
+          pushToast(
+            `Heads up — ${Math.round(d.ratio * 100)}% of this month's $${d.cap} budget is used. Switch to a free OpenRouter model to keep going without spending.`,
+            { tone: 'warn', duration: 7000 },
+          );
+        }
+      })
+      .catch(() => {
+        /* meter just hides */
+      });
+  }
+
+  // Load the server-side outbox. When the API reports it's disabled (no DB), we
+  // stay in localStorage mode (serverNotes left null).
+  function loadServerNotes() {
+    fetch('/api/builder-notes')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { enabled?: boolean; notes?: ServerNote[] } | null) => {
+        if (d && d.enabled) setServerNotes(d.notes ?? []);
+      })
+      .catch(() => {
+        /* stay in localStorage mode */
+      });
+  }
+
+  // Prime the meter + outbox on mount.
+  useEffect(() => {
+    loadBudget();
+    loadServerNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function captureBuilderNotes(text: string) {
+    // Server mode: the chat route already persisted any note during the stream
+    // flush — just refresh the drawer from the server.
+    if (serverNotes !== null) {
+      if (extractBuilderNotes(text).length > 0) loadServerNotes();
+      return;
+    }
     const excerpts = extractBuilderNotes(text);
     if (excerpts.length === 0) return;
     const ts = Date.now();
@@ -248,12 +322,46 @@ export default function ChatPane({
     });
   }
 
+  function toggleSelectNote(id: string) {
+    setSelectedNotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function sendNotesToBuilder() {
+    const ids = [...selectedNotes];
+    if (ids.length === 0) return;
+    try {
+      const res = await fetch('/api/builder-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) {
+        setSelectedNotes(new Set());
+        loadServerNotes();
+        pushToast(`Sent ${ids.length} note${ids.length === 1 ? '' : 's'} to the builder.`, {
+          tone: 'info',
+        });
+      } else {
+        pushToast("Couldn't send notes — try again.", { tone: 'warn' });
+      }
+    } catch {
+      pushToast("Couldn't send notes — try again.", { tone: 'warn' });
+    }
+  }
+
   async function copyNotes() {
-    // Newest-first, joined as markdown bullets.
-    const md = [...notes]
-      .reverse()
-      .map((n) => `- ${n.excerpt}`)
-      .join('\n');
+    // Newest-first, joined as markdown bullets. Server mode copies the notes in
+    // the active tab; localStorage mode copies the browser-local notes.
+    const excerpts =
+      serverNotes !== null
+        ? serverNotes.filter((n) => n.status === notesView).map((n) => n.excerpt)
+        : [...notes].reverse().map((n) => n.excerpt);
+    const md = excerpts.map((e) => `- ${e}`).join('\n');
     try {
       await navigator.clipboard.writeText(md);
     } catch {
@@ -379,6 +487,8 @@ export default function ChatPane({
       }
       finalizePlaceholder(text, chips);
       captureBuilderNotes(text);
+      // Refresh the budget meter (a billable turn may have just been metered).
+      loadBudget();
       // A full exchange just persisted server-side — let the parent refresh the
       // sidebar (title/order). No-op when persistence is disabled.
       if (conversationId) onExchange?.();
@@ -575,6 +685,13 @@ export default function ChatPane({
 
   const lastMessage = messages[messages.length - 1];
 
+  // Builder-notes drawer derived state (server vs localStorage mode).
+  const serverMode = serverNotes !== null;
+  const collectedNotes = serverNotes?.filter((n) => n.status === 'collected') ?? [];
+  const sentNotes = serverNotes?.filter((n) => n.status === 'sent') ?? [];
+  const badgeCount = serverMode ? collectedNotes.length : notes.length;
+  const visibleServerNotes = notesView === 'sent' ? sentNotes : collectedNotes;
+
   return (
     <main id="chat">
       <div className="hdr">
@@ -589,6 +706,15 @@ export default function ChatPane({
           </span>
         )}
         <div className="right">
+          {budget?.enabled && (
+            <span
+              className="budgetmeter"
+              data-level={budget.level}
+              title={`Estimated spend this month vs the $${budget.cap} cap. Free OpenRouter models don't count.`}
+            >
+              ${budget.spent.toFixed(2)} / ${budget.cap}
+            </span>
+          )}
           <ModelToggle provider={provider} onChange={onProviderChange} disabled={streaming} />
           <div className="noteswrap">
             <button
@@ -600,39 +726,106 @@ export default function ChatPane({
               title="Builder notes"
             >
               📮
-              {notes.length > 0 && <span className="notesbadge">{notes.length}</span>}
+              {badgeCount > 0 && <span className="notesbadge">{badgeCount}</span>}
             </button>
             {notesOpen && (
               <div className="notesdrawer" role="dialog" aria-label="Builder notes">
                 <div className="notesdrawer-hd">
                   <b>📮 Builder notes</b>
                   <div className="notesdrawer-acts">
-                    <button type="button" onClick={copyNotes} disabled={notes.length === 0}>
+                    <button type="button" onClick={copyNotes}>
                       Copy all
                     </button>
-                    <button type="button" onClick={clearNotes} disabled={notes.length === 0}>
-                      Clear
-                    </button>
+                    {!serverMode && (
+                      <button type="button" onClick={clearNotes} disabled={notes.length === 0}>
+                        Clear
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="notesdrawer-body">
-                  {notes.length === 0 ? (
-                    <p className="notesempty">
-                      No notes yet — when Mary says &ldquo;noted for the builder&rdquo;, it lands
-                      here.
-                    </p>
-                  ) : (
-                    [...notes].reverse().map((n, i) => (
-                      <div className="noteitem" key={`${n.ts}-${i}`}>
-                        <p>{n.excerpt}</p>
-                        <time>{new Date(n.ts).toLocaleString()}</time>
+
+                {serverMode ? (
+                  <>
+                    <div className="notestabs">
+                      <button
+                        type="button"
+                        className={notesView === 'collected' ? 'on' : ''}
+                        onClick={() => setNotesView('collected')}
+                      >
+                        Collected ({collectedNotes.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={notesView === 'sent' ? 'on' : ''}
+                        onClick={() => setNotesView('sent')}
+                      >
+                        Sent ({sentNotes.length})
+                      </button>
+                    </div>
+                    <div className="notesdrawer-body">
+                      {visibleServerNotes.length === 0 ? (
+                        <p className="notesempty">
+                          {notesView === 'sent'
+                            ? 'Nothing sent yet — select collected notes and press “Send to builder”.'
+                            : 'No notes yet — when Mary says “noted for the builder”, it lands here.'}
+                        </p>
+                      ) : (
+                        visibleServerNotes.map((n) => (
+                          <label className="noteitem noterow" key={n.id}>
+                            {notesView === 'collected' && (
+                              <input
+                                type="checkbox"
+                                checked={selectedNotes.has(n.id)}
+                                onChange={() => toggleSelectNote(n.id)}
+                                aria-label="Select note to send"
+                              />
+                            )}
+                            <span>
+                              <p>{n.excerpt}</p>
+                              <time>{new Date(n.created).toLocaleString()}</time>
+                            </span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                    {notesView === 'collected' && (
+                      <div className="notesdrawer-acts sendrow">
+                        <button
+                          type="button"
+                          className="sendbtn"
+                          onClick={sendNotesToBuilder}
+                          disabled={selectedNotes.size === 0}
+                        >
+                          Send to builder ({selectedNotes.size})
+                        </button>
                       </div>
-                    ))
-                  )}
-                </div>
-                <div className="notesfoot">
-                  Interim: stored in this browser only — the real builder outbox ships in goal 4.
-                </div>
+                    )}
+                    <div className="notesfoot">
+                      Saved to the builder outbox. “Send” marks a note builder-visible.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="notesdrawer-body">
+                      {notes.length === 0 ? (
+                        <p className="notesempty">
+                          No notes yet — when Mary says &ldquo;noted for the builder&rdquo;, it lands
+                          here.
+                        </p>
+                      ) : (
+                        [...notes].reverse().map((n, i) => (
+                          <div className="noteitem" key={`${n.ts}-${i}`}>
+                            <p>{n.excerpt}</p>
+                            <time>{new Date(n.ts).toLocaleString()}</time>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className="notesfoot">
+                      Stored in this browser only — connect a database to sync the builder outbox.
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

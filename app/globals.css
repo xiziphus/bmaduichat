@@ -110,6 +110,21 @@ input { font-family: inherit; }
 .notesempty { font-size: 12.5px; color: var(--dim); font-weight: 700; line-height: 1.5; }
 .notesfoot { font-size: 10.5px; color: #a98fc9; font-weight: 700; line-height: 1.45; border-top: 1px solid var(--line); padding-top: 9px; }
 
+/* budget meter (builder) */
+.budgetmeter { font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: .02em; border-radius: 99px; padding: 5px 11px; background: var(--mint); color: var(--mint-ink); white-space: nowrap; }
+.budgetmeter[data-level="warn"] { background: var(--amber); color: var(--amber-ink); }
+.budgetmeter[data-level="blocked"] { background: #ffe0d9; color: #a83a24; }
+
+/* builder-notes: tabs, selectable rows, send action */
+.notestabs { display: flex; gap: 6px; }
+.notestabs button { flex: 1; font-size: 11px; font-weight: 900; border-radius: 9px; padding: 6px 8px; background: var(--vio-soft); color: var(--vio); }
+.notestabs button.on { background: var(--vio); color: #fff; }
+.noterow { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+.noterow input[type="checkbox"] { margin-top: 3px; accent-color: var(--vio); flex: none; }
+.notesdrawer-acts.sendrow { margin-left: 0; }
+.sendbtn { width: 100%; font-size: 11.5px; font-weight: 900; border-radius: 11px; padding: 8px 10px; background: linear-gradient(135deg, var(--coral), var(--coral2)); color: #fff; }
+.sendbtn:disabled { opacity: .45; cursor: default; }
+
 /* input */
 #chat .inputw { margin-top: 14px; position: relative; }
 #chat .input { background: #fff; border-radius: 18px; padding: 6px 8px 6px 17px; font-size: 13.5px; color: var(--ink); font-weight: 600; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 10px rgba(90, 60, 130, .1); }

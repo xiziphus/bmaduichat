@@ -17,6 +17,27 @@ no accounts, no persistence beyond the current browser tab in this first slice.
 | `OPENROUTER_MODEL` | no | `meta-llama/llama-3.3-70b-instruct:free` | OpenRouter model id (pick any free-tier model) |
 | `OPENROUTER_MULTIMODAL` | no | `false` | Force image/PDF support on for OpenRouter. See [Attachments](#attachments-images-pdfs-docs--voice). |
 | `DATABASE_URL` | no (optional) | — | Neon Postgres connection string. **Unset → the app runs exactly as before** (ephemeral, in-tab conversations). Set + migrated → conversations and history persist. |
+| `BUDGET_USD` | no | `10` | Monthly spend cap (USD). A safety net, not accounting — cost is **estimated** from a small per-model price table. Requires `DATABASE_URL`; with no DB there's no metering or cap. |
+
+## Budget cap (optional, requires a database)
+
+When `DATABASE_URL` is set, each billable chat completion writes an **estimated** usage
+row (provider, model, token counts, cost) and the header shows a `$spent / $cap` meter for
+the current calendar month. Cost is estimated from a small, builder-tunable price table
+(`lib/usage.ts`) using provider-reported token counts (Gemini `usageMetadata`, OpenRouter
+final-chunk `usage`) or a ~4-chars/token fallback — treat it as a guardrail, not a bill.
+
+- At **80%** of the cap you get a one-time warning.
+- At **100%**, a billable request is **blocked** with an honest bubble suggesting a free model.
+- **Free OpenRouter models** (id ending `:free`) are never counted and **always work**, even at 100%.
+- Unknown/untabled models cost 0, so they never block.
+
+## Builder notes outbox
+
+When Mary says something is *"noted for the builder"*, the excerpt is captured. With a
+database configured it persists to the `builder_notes` table (visible across devices via the
+📮 drawer); select notes and **Send to builder** flips them to a builder-visible "Sent" tab.
+With no database it falls back to browser-local storage, exactly as before.
 
 ## Attachments (images, PDFs, docs) + voice
 

@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
 import { buildMarySystemPrompt } from '@/lib/mary';
-import { streamChat, ProviderError, providerLabel, type Msg, type Provider } from '@/lib/llm';
+import {
+  streamChat,
+  ProviderError,
+  providerLabel,
+  modelForProvider,
+  type ChatStream,
+  type Msg,
+  type Provider,
+} from '@/lib/llm';
 import { isPersistenceEnabled, transaction } from '@/lib/db';
 import { buildAppendMessageQuery } from '@/lib/repo/messages';
 import type { AttachmentMeta } from '@/lib/attachments';
@@ -9,8 +17,37 @@ import { createVersion } from '@/lib/repo/artifacts';
 import { parseChips } from '@/lib/chips';
 import { parseDocument } from '@/lib/document';
 import { parseReferences, resolveReferences } from '@/lib/references';
+import {
+  isFreeModel,
+  estimateCost,
+  tokensOrEstimate,
+  capStatus,
+  budgetCap,
+  blockedMessage,
+} from '@/lib/usage';
+import { insertUsage, monthToDateSpend } from '@/lib/repo/usage';
+import { insertBuilderNote } from '@/lib/repo/builder-notes';
+import { extractBuilderNotes } from '@/lib/builder-notes';
 
 export const runtime = 'nodejs';
+
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream; charset=utf-8',
+  'Cache-Control': 'no-cache, no-transform',
+  Connection: 'keep-alive',
+};
+
+/**
+ * A complete, self-contained SSE response that streams a single honest assistant
+ * bubble and closes. Used for the budget hard-stop — the client renders it as a
+ * normal Mary reply (visible, never silent) and nothing is persisted.
+ */
+function honestBubbleResponse(message: string): Response {
+  const encoder = new TextEncoder();
+  const body =
+    `data: ${JSON.stringify({ token: message })}\n\n` + 'data: [DONE]\n\n';
+  return new Response(encoder.encode(body), { headers: SSE_HEADERS });
+}
 
 type ChatBody = {
   messages?: unknown;
@@ -111,9 +148,27 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  let tokens: ReadableStream<string>;
+  // Budget cap (metering requires a DB — no DATABASE_URL means no cap at all).
+  // Free models are ALWAYS allowed and never checked. A billable request at
+  // 100% of the monthly cap is blocked with an honest, visible bubble.
+  const model = modelForProvider(provider as Provider);
+  const free = isFreeModel(provider as Provider, model);
+  if (isPersistenceEnabled() && !free) {
+    try {
+      const spent = await monthToDateSpend();
+      const cap = budgetCap();
+      if (capStatus(spent, cap).level === 'blocked') {
+        return honestBubbleResponse(blockedMessage(cap));
+      }
+    } catch (err) {
+      // Fail OPEN — a metering hiccup must never block chat.
+      console.error('[chat] cap check failed', err instanceof Error ? err.name : typeof err);
+    }
+  }
+
+  let chat: ChatStream;
   try {
-    tokens = await streamChat(provider as Provider, system, modelMessages);
+    chat = await streamChat(provider as Provider, system, modelMessages);
   } catch (err) {
     if (err instanceof ProviderError) {
       // Log provider + status only — never upstream response bodies.
@@ -142,20 +197,27 @@ export async function POST(req: NextRequest) {
   // If the stream errors mid-flight, flush never runs and nothing is persisted
   // (matches the spec I/O matrix: tx rolled back / nothing on failure).
   const encoder = new TextEncoder();
+  // Metering runs whenever a DB is configured (independent of a conversation id).
+  const meter = isPersistenceEnabled();
+  // Rough prompt text (all turns) for a token estimate when the provider doesn't
+  // report counts. Cheap and only used as a fallback.
+  const promptText = meter ? modelMessages.map((m) => m.content).join('\n') : '';
   let assistantRaw = '';
-  const sse = tokens.pipeThrough(
+  const sse = chat.stream.pipeThrough(
     new TransformStream<string, Uint8Array>({
       transform(token, controller) {
-        if (persist) assistantRaw += token;
+        if (meter) assistantRaw += token;
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
       },
       async flush(controller) {
+        // Parse the finished reply once — needed for persistence, builder notes,
+        // and to keep chips/doc tags out of stored text.
+        const { text: afterDoc, document } = meter
+          ? parseDocument(assistantRaw)
+          : { text: '', document: undefined };
+        const { text, chips } = meter ? parseChips(afterDoc) : { text: '', chips: [] as string[] };
+
         if (persist && userTurn !== undefined && conversationId !== undefined) {
-          // Strip the <document> block first, then chips, so the persisted chat
-          // bubble carries neither tag. A wrap-up turn yields both a chat reply
-          // and a durable document; each is stored in its own place.
-          const { text: afterDoc, document } = parseDocument(assistantRaw);
-          const { text, chips } = parseChips(afterDoc);
           try {
             if (text || chips.length > 0) {
               await transaction([
@@ -188,16 +250,41 @@ export async function POST(req: NextRequest) {
             );
           }
         }
+
+        // Metering + builder-note outbox (DB on only). Failures are swallowed —
+        // the reply already streamed.
+        if (meter) {
+          // Bill the call (free models are never counted).
+          if (!free) {
+            try {
+              const tokensIn = tokensOrEstimate(chat.usage.tokensIn, promptText);
+              const tokensOut = tokensOrEstimate(chat.usage.tokensOut, assistantRaw);
+              const costEst = estimateCost({
+                provider: provider as Provider,
+                model,
+                tokensIn,
+                tokensOut,
+              });
+              await insertUsage({ provider: provider as Provider, model, tokensIn, tokensOut, costEst });
+            } catch (err) {
+              console.error('[chat] usage write failed', err instanceof Error ? err.name : typeof err);
+            }
+          }
+          // Persist any "noted for the builder" excerpts server-side.
+          try {
+            const excerpts = extractBuilderNotes(text);
+            for (const excerpt of excerpts) {
+              await insertBuilderNote({ conversationId: conversationId ?? null, excerpt });
+            }
+          } catch (err) {
+            console.error('[chat] builder-note write failed', err instanceof Error ? err.name : typeof err);
+          }
+        }
+
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       },
     }),
   );
 
-  return new Response(sse, {
-    headers: {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-    },
-  });
+  return new Response(sse, { headers: SSE_HEADERS });
 }

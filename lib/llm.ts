@@ -82,13 +82,29 @@ export function providerLabel(p: Provider): string {
   return PROVIDER_LABEL[p];
 }
 
+/** The model id the given provider will use, from env (with documented defaults). */
+export function modelForProvider(provider: Provider): string {
+  if (provider === 'gemini') return process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  return process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+}
+
+/**
+ * Provider-reported token counts, captured from the stream tail. Either field is
+ * null when the provider didn't report it (caller then falls back to an estimate).
+ * The object is mutated as the stream is consumed — read it AFTER the stream drains.
+ */
+export type UsageTokens = { tokensIn: number | null; tokensOut: number | null };
+
+/** A normalized token stream plus a usage sink filled as the stream is read. */
+export type ChatStream = { stream: ReadableStream<string>; usage: UsageTokens };
+
 const UPSTREAM_TIMEOUT_MS = 60_000;
 
 export async function streamChat(
   provider: Provider,
   system: string,
   messages: Msg[],
-): Promise<ReadableStream<string>> {
+): Promise<ChatStream> {
   if (provider === 'gemini') return streamGemini(system, messages);
   if (provider === 'openrouter') return streamOpenRouter(system, messages);
   throw new ProviderError(provider, 400, 'upstream', `Unknown provider: ${provider satisfies never}`);
@@ -157,11 +173,28 @@ function sseDataStream(body: ReadableStream<Uint8Array>): ReadableStream<string>
 function mapTokens(
   data: ReadableStream<string>,
   extract: (payload: string) => string | undefined,
+  usage?: {
+    sink: UsageTokens;
+    extract: (payload: string) => Partial<UsageTokens> | undefined;
+  },
 ): ReadableStream<string> {
   return data.pipeThrough(
     new TransformStream<string, string>({
       transform(payload, controller) {
         if (!payload || payload === '[DONE]') return;
+        // Sniff token usage from the same payload (final chunk carries it). Best
+        // effort — a parse miss never affects the text stream.
+        if (usage) {
+          try {
+            const u = usage.extract(payload);
+            if (u) {
+              if (typeof u.tokensIn === 'number') usage.sink.tokensIn = u.tokensIn;
+              if (typeof u.tokensOut === 'number') usage.sink.tokensOut = u.tokensOut;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
         let token: string | undefined;
         try {
           token = extract(payload);
@@ -176,12 +209,12 @@ function mapTokens(
 
 /* ---------------- Gemini ---------------- */
 
-async function streamGemini(system: string, messages: Msg[]): Promise<ReadableStream<string>> {
+async function streamGemini(system: string, messages: Msg[]): Promise<ChatStream> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new ProviderError('gemini', 500, 'missing-key', 'GEMINI_API_KEY is not set');
   }
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const model = modelForProvider('gemini');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
   const res = await providerFetch('gemini', url, {
@@ -205,22 +238,38 @@ async function streamGemini(system: string, messages: Msg[]): Promise<ReadableSt
     throw new ProviderError('gemini', res.status, 'upstream', `Gemini upstream error (${res.status})`);
   }
 
-  return mapTokens(sseDataStream(res.body), (payload) => {
-    const json = JSON.parse(payload) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-    };
-    return json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('');
-  });
+  const usage: UsageTokens = { tokensIn: null, tokensOut: null };
+  const stream = mapTokens(
+    sseDataStream(res.body),
+    (payload) => {
+      const json = JSON.parse(payload) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      };
+      return json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('');
+    },
+    {
+      sink: usage,
+      extract: (payload) => {
+        const json = JSON.parse(payload) as {
+          usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+        };
+        const um = json.usageMetadata;
+        if (!um) return undefined;
+        return { tokensIn: um.promptTokenCount ?? null, tokensOut: um.candidatesTokenCount ?? null };
+      },
+    },
+  );
+  return { stream, usage };
 }
 
 /* ---------------- OpenRouter ---------------- */
 
-async function streamOpenRouter(system: string, messages: Msg[]): Promise<ReadableStream<string>> {
+async function streamOpenRouter(system: string, messages: Msg[]): Promise<ChatStream> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new ProviderError('openrouter', 500, 'missing-key', 'OPENROUTER_API_KEY is not set');
   }
-  const model = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+  const model = modelForProvider('openrouter');
 
   const res = await providerFetch('openrouter', 'https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -231,6 +280,8 @@ async function streamOpenRouter(system: string, messages: Msg[]): Promise<Readab
     body: JSON.stringify({
       model,
       stream: true,
+      // Ask for a final usage chunk (prompt/completion token counts).
+      stream_options: { include_usage: true },
       messages: [{ role: 'system', content: system }, ...messages.map(openRouterMessage)],
     }),
   });
@@ -241,10 +292,26 @@ async function streamOpenRouter(system: string, messages: Msg[]): Promise<Readab
     throw new ProviderError('openrouter', res.status, 'upstream', `OpenRouter upstream error (${res.status})`);
   }
 
-  return mapTokens(sseDataStream(res.body), (payload) => {
-    const json = JSON.parse(payload) as {
-      choices?: { delta?: { content?: string } }[];
-    };
-    return json.choices?.[0]?.delta?.content ?? undefined;
-  });
+  const usage: UsageTokens = { tokensIn: null, tokensOut: null };
+  const stream = mapTokens(
+    sseDataStream(res.body),
+    (payload) => {
+      const json = JSON.parse(payload) as {
+        choices?: { delta?: { content?: string } }[];
+      };
+      return json.choices?.[0]?.delta?.content ?? undefined;
+    },
+    {
+      sink: usage,
+      extract: (payload) => {
+        const json = JSON.parse(payload) as {
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+        };
+        const u = json.usage;
+        if (!u) return undefined;
+        return { tokensIn: u.prompt_tokens ?? null, tokensOut: u.completion_tokens ?? null };
+      },
+    },
+  );
+  return { stream, usage };
 }
