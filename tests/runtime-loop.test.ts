@@ -214,6 +214,57 @@ describe('runLoop — structured-text fallback', () => {
     expect(result.status).toBe('final');
     if (result.status === 'final') expect(result.text).toBe('Just chatting.');
   });
+
+  it('a NON-tool-capable model reply with a <chips> block (no <tool>) is final, chips preserved', async () => {
+    // The exact shape tencent/hy3:free returns on a simple "hi": prose + chips,
+    // no tool call. It must be treated as the final answer and streamed verbatim.
+    const reply =
+      "Hi! What are you chewing on?\n" +
+      '<chips>["🔥 Pressure-test it","⛏️ Keep digging"]</chips>';
+    const { client } = scriptedModel([{ text: reply, toolCalls: [], usage: noUsage }]);
+    const { events, result } = await drain(
+      runLoop({
+        model: client,
+        system: 'sys',
+        transcript: [{ role: 'user', content: 'hi' }],
+        tools: TOOL_SCHEMAS,
+        supportsTools: false,
+        executeTool: echoExecutor,
+      }),
+    );
+    expect(result.status).toBe('final');
+    if (result.status === 'final') expect(result.text).toBe(reply);
+    // The chips block survives to the streamed text event (nothing stripped).
+    const textEv = events.find((e) => e.type === 'text');
+    expect(textEv && textEv.type === 'text' ? textEv.delta : '').toBe(reply);
+    expect(textEv && textEv.type === 'text' ? textEv.delta : '').toContain('<chips>[');
+  });
+
+  it('the iteration cap surfaces real prose the model produced, not just the canned message', async () => {
+    // A tool-happy weak model that always emits prose + a tool tag, never a clean
+    // final. At the cap we should see its last prose, never an empty turn.
+    const client: ModelClient = async () => ({
+      text: 'Here is a thought <tool name="technique_query">{"kind":"list"}</tool>',
+      toolCalls: [],
+      usage: noUsage,
+    });
+    const { events, result } = await drain(
+      runLoop({
+        model: client,
+        system: 'sys',
+        transcript: [{ role: 'user', content: 'go' }],
+        tools: TOOL_SCHEMAS,
+        supportsTools: false,
+        executeTool: echoExecutor,
+        maxIterations: 2,
+      }),
+    );
+    expect(result.status).toBe('capped');
+    const capEv = events.find((e) => e.type === 'text');
+    const delta = capEv && capEv.type === 'text' ? capEv.delta : '';
+    expect(delta).toBe('Here is a thought');
+    expect(delta.length).toBeGreaterThan(0);
+  });
 });
 
 describe('parseToolTag / stripToolTags', () => {

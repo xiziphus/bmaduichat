@@ -149,114 +149,155 @@ function engineChatResponse(params: EngineChatParams): Response {
   const encoder = new TextEncoder();
   const send = (obj: unknown) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
 
+  const snagMessage = `${providerLabel(provider)} hit a snag — try again or switch model.`;
+  const emptyMessage = `${providerLabel(provider)} returned an empty response — try again or switch model.`;
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let assistantRaw = '';
       let awaitingRunId: string | null | undefined;
       let errored = false;
+      // Never let a stream-write throw abort the whole handler — that would
+      // strand the client with no [DONE] (empty output + hang).
+      const enqueue = (obj: unknown) => {
+        try {
+          controller.enqueue(send(obj));
+        } catch {
+          /* controller already closed/errored */
+        }
+      };
 
       try {
-        for await (const ev of runWorkflow({
-          conversationId: engineConvId,
-          skillSlug: BRAINSTORMING_SLUG,
-          input,
-          inputParts,
-          history,
-          technique,
-          provider,
-          model,
-          deps: { persistence: enginePersistence },
-        })) {
-          if (ev.type === 'text') {
-            assistantRaw += ev.delta;
-            controller.enqueue(send({ token: ev.delta }));
-          } else if (ev.type === 'checkpoint') {
-            // The HALT question is Mary's user-facing turn — stream it as text.
-            if (ev.prompt) {
-              assistantRaw += ev.prompt;
-              controller.enqueue(send({ token: ev.prompt }));
+        try {
+          for await (const ev of runWorkflow({
+            conversationId: engineConvId,
+            skillSlug: BRAINSTORMING_SLUG,
+            input,
+            inputParts,
+            history,
+            technique,
+            provider,
+            model,
+            deps: { persistence: enginePersistence },
+          })) {
+            if (ev.type === 'text') {
+              if (ev.delta) {
+                assistantRaw += ev.delta;
+                enqueue({ token: ev.delta });
+              }
+            } else if (ev.type === 'checkpoint') {
+              // The HALT question is Mary's user-facing turn — stream it as text.
+              if (ev.prompt) {
+                assistantRaw += ev.prompt;
+                enqueue({ token: ev.prompt });
+              }
+              awaitingRunId = ev.runId;
+            } else if (ev.type === 'error') {
+              errored = true;
+              if (!assistantRaw.trim()) {
+                assistantRaw = ev.message || snagMessage;
+                enqueue({ token: assistantRaw });
+              }
             }
-            awaitingRunId = ev.runId;
-          } else if (ev.type === 'error') {
-            errored = true;
-            if (!assistantRaw) {
-              assistantRaw = ev.message;
-              controller.enqueue(send({ token: ev.message }));
+            // progress/tool/tool_result/done → not surfaced into the bubble.
+          }
+        } catch (err) {
+          // Any throw out of the engine (provider/tool/serialization). Surface an
+          // honest, VISIBLE bubble — never a silent empty stream.
+          console.error(
+            '[chat] engine run failed',
+            err instanceof Error ? err.name : typeof err,
+          );
+          errored = true;
+          if (!assistantRaw.trim()) {
+            assistantRaw = snagMessage;
+            enqueue({ token: assistantRaw });
+          }
+        }
+
+        // Parse the accumulated reply (pure, no DB) so the empty-guarantee and
+        // persistence both see the real content, regardless of metering.
+        const { text: afterDoc, document } = parseDocument(assistantRaw);
+        const { text, chips } = parseChips(afterDoc);
+
+        // GUARANTEE a visible reply. A tiny free model can return an empty
+        // completion; without this the client would get zero tokens (blank).
+        if (!assistantRaw.trim()) {
+          assistantRaw = errored ? snagMessage : emptyMessage;
+          enqueue({ token: assistantRaw });
+        }
+
+        // Persist the turn (DB on + a real conversation). A DB failure only skips
+        // persistence — the reply already streamed.
+        if (!errored && persist && params.userTurn !== undefined && conversationId !== undefined) {
+          try {
+            if (text || chips.length > 0) {
+              await transaction([
+                buildAppendMessageQuery({
+                  conversationId,
+                  role: 'user',
+                  content: params.userTurn,
+                  attachments: params.userAttachments,
+                }),
+                buildAppendMessageQuery({ conversationId, role: 'assistant', content: text, chips }),
+              ]);
+            }
+            if (document) {
+              const artifact = await createVersion({
+                conversationId,
+                title: document.title,
+                markdown: document.body,
+              });
+              enqueue({ artifact: { id: artifact.id } });
+            }
+          } catch (err) {
+            console.error('[chat] engine persist turn failed', err instanceof Error ? err.name : err);
+          }
+        }
+
+        // Metering + builder-note outbox (DB on). Never on an errored/empty turn.
+        if (meter && !errored && text) {
+          if (!free) {
+            try {
+              const tokensIn = tokensOrEstimate(null, promptText);
+              const tokensOut = tokensOrEstimate(null, assistantRaw);
+              const costEst = estimateCost({ provider, model, tokensIn, tokensOut });
+              await insertUsage({ provider, model, tokensIn, tokensOut, costEst });
+            } catch (err) {
+              console.error('[chat] engine usage write failed', err instanceof Error ? err.name : typeof err);
             }
           }
-          // progress/tool/tool_result/done → not surfaced into the bubble.
+          try {
+            const excerpts = extractBuilderNotes(text);
+            for (const excerpt of excerpts) {
+              await insertBuilderNote({ conversationId: conversationId ?? null, excerpt });
+            }
+          } catch (err) {
+            console.error('[chat] engine builder-note write failed', err instanceof Error ? err.name : typeof err);
+          }
+        }
+
+        // Signal the awaiting_user checkpoint AFTER the turn so the client can
+        // show the "Mary is waiting on you" affordance.
+        if (awaitingRunId !== undefined) {
+          enqueue({ awaiting: { runId: awaitingRunId } });
         }
       } catch (err) {
-        console.error('[chat] engine run failed', err instanceof Error ? err.name : typeof err);
-        errored = true;
-        if (!assistantRaw) {
-          const msg = `${providerLabel(provider)} hit a snag — try again or switch model.`;
-          assistantRaw = msg;
-          controller.enqueue(send({ token: msg }));
-        }
-      }
-
-      // Flush: mirror the hardcoded path — parse once, persist the turn, version
-      // any <document>, meter the call, and capture builder notes.
-      const { text: afterDoc, document } = meter
-        ? parseDocument(assistantRaw)
-        : { text: '', document: undefined };
-      const { text, chips } = meter ? parseChips(afterDoc) : { text: '', chips: [] as string[] };
-
-      if (!errored && persist && params.userTurn !== undefined && conversationId !== undefined) {
+        // Last-ditch: anything unexpected in the flush must still close cleanly.
+        console.error('[chat] engine stream failed', err instanceof Error ? err.name : typeof err);
+      } finally {
+        // ALWAYS terminate the SSE stream — the client waits for [DONE].
         try {
-          if (text || chips.length > 0) {
-            await transaction([
-              buildAppendMessageQuery({
-                conversationId,
-                role: 'user',
-                content: params.userTurn,
-                attachments: params.userAttachments,
-              }),
-              buildAppendMessageQuery({ conversationId, role: 'assistant', content: text, chips }),
-            ]);
-          }
-          if (document) {
-            const artifact = await createVersion({
-              conversationId,
-              title: document.title,
-              markdown: document.body,
-            });
-            controller.enqueue(send({ artifact: { id: artifact.id } }));
-          }
-        } catch (err) {
-          console.error('[chat] engine persist turn failed', err instanceof Error ? err.name : err);
-        }
-      }
-
-      if (meter && !errored) {
-        if (!free) {
-          try {
-            const tokensIn = tokensOrEstimate(null, promptText);
-            const tokensOut = tokensOrEstimate(null, assistantRaw);
-            const costEst = estimateCost({ provider, model, tokensIn, tokensOut });
-            await insertUsage({ provider, model, tokensIn, tokensOut, costEst });
-          } catch (err) {
-            console.error('[chat] engine usage write failed', err instanceof Error ? err.name : typeof err);
-          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        } catch {
+          /* already closed */
         }
         try {
-          const excerpts = extractBuilderNotes(text);
-          for (const excerpt of excerpts) {
-            await insertBuilderNote({ conversationId: conversationId ?? null, excerpt });
-          }
-        } catch (err) {
-          console.error('[chat] engine builder-note write failed', err instanceof Error ? err.name : typeof err);
+          controller.close();
+        } catch {
+          /* already closed */
         }
       }
-
-      // Signal the awaiting_user checkpoint AFTER the turn so the client can show
-      // the "Mary is waiting on you" affordance.
-      if (awaitingRunId !== undefined) {
-        controller.enqueue(send({ awaiting: { runId: awaitingRunId } }));
-      }
-      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-      controller.close();
     },
   });
 

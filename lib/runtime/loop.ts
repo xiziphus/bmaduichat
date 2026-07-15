@@ -108,6 +108,10 @@ export async function* runLoop(
 ): AsyncGenerator<RunEvent, LoopResult, void> {
   const max = opts.maxIterations ?? DEFAULT_MAX_ITERATIONS;
   const transcript: ToolMsg[] = [...opts.transcript];
+  // The most recent user-facing prose seen on a tool-taking turn. If we hit the
+  // iteration cap we surface this (real model text) rather than only the canned
+  // message — so the cap "emits whatever text was produced", never nothing.
+  let lastText = '';
 
   for (let i = 0; i < max; i++) {
     const turn = await opts.model(
@@ -118,6 +122,7 @@ export async function* runLoop(
 
     if (opts.supportsTools) {
       if (turn.toolCalls.length > 0) {
+        if (turn.text && turn.text.trim()) lastText = turn.text;
         // Record the assistant's tool-call turn verbatim so the model sees it.
         transcript.push({ role: 'assistant', content: turn.text, toolCalls: turn.toolCalls });
         yield { type: 'progress', note: 'Working…' };
@@ -141,6 +146,10 @@ export async function* runLoop(
     // -------- structured-text fallback --------
     const tag = parseToolTag(turn.text);
     if (tag) {
+      // Any prose alongside the tag is real user-facing text — remember it for
+      // the cap fallback so a tool-happy weak model still yields something.
+      const visible = stripToolTags(turn.text);
+      if (visible) lastText = visible;
       // Echo the raw model turn (with the tag) so the transcript stays coherent.
       transcript.push({ role: 'assistant', content: turn.text });
       yield { type: 'progress', note: 'Working…' };
@@ -168,7 +177,9 @@ export async function* runLoop(
     return { status: 'final', text, transcript };
   }
 
-  // Iteration cap — safe, honest stop.
-  yield { type: 'text', delta: CAPPED_MESSAGE };
-  return { status: 'capped', text: CAPPED_MESSAGE, transcript };
+  // Iteration cap — safe, honest stop. Prefer any real prose the model produced
+  // along the way; fall back to the canned message so this is NEVER empty.
+  const capText = lastText.trim() ? lastText : CAPPED_MESSAGE;
+  yield { type: 'text', delta: capText };
+  return { status: 'capped', text: capText, transcript };
 }

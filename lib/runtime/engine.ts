@@ -187,13 +187,23 @@ export async function* runWorkflow(
   });
 
   if (result.status === 'halt') {
-    await store.persistCheckpoint(runId, baseState(result.prompt));
+    // Persistence is best-effort: a store write failure must never swallow the
+    // user-facing checkpoint (that would blank the reply). Log and continue.
+    try {
+      await store.persistCheckpoint(runId, baseState(result.prompt));
+    } catch (err) {
+      void err;
+    }
     yield { type: 'checkpoint', prompt: result.prompt, runId };
     yield { type: 'done', status: 'awaiting_user', runId };
     return;
   }
 
-  // final | capped → the run is done.
-  await store.persistTerminal(runId, 'done', baseState(null));
+  // final | capped → the run is done. Same best-effort guard on the write.
+  try {
+    await store.persistTerminal(runId, 'done', baseState(null));
+  } catch (err) {
+    void err;
+  }
   yield { type: 'done', status: 'done', runId };
 }
