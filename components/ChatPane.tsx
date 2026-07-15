@@ -19,6 +19,14 @@ type UiMessage = {
   error?: boolean;
 };
 
+/** Rehydrated message shape passed in from the persisted thread. */
+export type InitialMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  chips?: string[] | null;
+};
+
 let uid = 0;
 const nextId = () => `m${++uid}-${Date.now()}`;
 
@@ -26,14 +34,29 @@ function toApiMessages(msgs: UiMessage[]): Msg[] {
   return msgs.filter((m) => !m.error).map((m) => ({ role: m.role, content: m.content }));
 }
 
+function seed(initial: InitialMessage[]): UiMessage[] {
+  return initial.map((m) => ({
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    chips: m.chips ?? undefined,
+  }));
+}
+
 export default function ChatPane({
   provider,
   onProviderChange,
+  conversationId = null,
+  initialMessages = [],
+  onExchange,
 }: {
   provider: Provider;
   onProviderChange: (p: Provider) => void;
+  conversationId?: string | null;
+  initialMessages?: InitialMessage[];
+  onExchange?: () => void;
 }) {
-  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [messages, setMessages] = useState<UiMessage[]>(() => seed(initialMessages));
   const [catalog, setCatalog] = useState<Technique[]>([]);
   const [pair, setPair] = useState<[Technique, Technique] | null>(null);
   const [activeTechnique, setActiveTechnique] = useState<Technique | undefined>(undefined);
@@ -152,6 +175,7 @@ export default function ChatPane({
           messages: toApiMessages(history),
           provider,
           technique,
+          conversationId,
         }),
       });
 
@@ -202,6 +226,9 @@ export default function ChatPane({
       }
       finalizePlaceholder(text, chips);
       captureBuilderNotes(text);
+      // A full exchange just persisted server-side — let the parent refresh the
+      // sidebar (title/order). No-op when persistence is disabled.
+      if (conversationId) onExchange?.();
     } catch {
       replaceWithError(`${providerLabel(provider)} hit a snag — try again or switch model.`);
     } finally {
