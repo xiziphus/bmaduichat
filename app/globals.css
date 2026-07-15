@@ -119,6 +119,43 @@ input { font-family: inherit; }
 #chat .input .send { width: 34px; height: 34px; border-radius: 13px; background: linear-gradient(135deg, var(--coral), var(--coral2)); color: #fff; display: grid; place-items: center; flex: none; font-size: 15px; }
 #chat .input .send:disabled { opacity: .5; cursor: default; }
 
+/* composer icon buttons (📎 attach, 🎙 mic) */
+.filehide { display: none; }
+#chat .input .iconbtn { width: 32px; height: 32px; border-radius: 12px; background: var(--vio-soft); color: var(--vio); display: grid; place-items: center; flex: none; font-size: 15px; line-height: 1; }
+#chat .input .iconbtn:hover { background: #e9dcf7; }
+#chat .input .iconbtn:disabled { opacity: .45; cursor: default; }
+#chat .input .micbtn.rec { background: var(--coral); color: #fff; animation: micpulse 1.1s ease-in-out infinite; }
+@keyframes micpulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 125, 107, .5); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 125, 107, 0); }
+}
+
+/* staged attachment chips (above the input) */
+.attachrow { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 8px; }
+.attach { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1.5px solid #e6dcf0; border-radius: 12px; padding: 5px 8px 5px 10px; font-size: 12px; font-weight: 800; color: var(--ink); max-width: 220px; box-shadow: 0 1px 4px rgba(90, 60, 130, .07); }
+.attach .attach-ico { font-size: 13px; line-height: 1; }
+.attach .attach-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attach .attach-x { width: 18px; height: 18px; border-radius: 50%; background: var(--vio-soft); color: var(--vio); display: grid; place-items: center; font-size: 14px; line-height: 1; flex: none; }
+.attach .attach-x:hover { background: var(--coral); color: #fff; }
+
+/* persisted attachment chips on a message bubble */
+.msgattach { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.msgattach.mine { justify-content: flex-end; }
+.attach.mini { padding: 4px 10px; font-size: 11px; font-weight: 800; background: var(--vio-soft); border-color: transparent; color: var(--vio); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+
+/* ================= TOASTS ================= */
+.toaster { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 999; display: flex; flex-direction: column; gap: 9px; align-items: center; pointer-events: none; width: min(440px, calc(100vw - 32px)); }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 12px; width: 100%; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--vio); border-radius: 14px; padding: 12px 14px; box-shadow: 0 12px 40px rgba(90, 60, 130, .22); font-size: 13px; font-weight: 700; color: var(--ink); line-height: 1.45; animation: toastin .18s ease-out; }
+.toast.warn { border-left-color: var(--coral); background: var(--amber); color: #6b5620; }
+.toast.error { border-left-color: #d64550; }
+.toast .toast-msg { flex: 1; }
+.toast .toast-x { width: 22px; height: 22px; border-radius: 50%; background: rgba(90, 60, 130, .08); color: inherit; display: grid; place-items: center; font-size: 15px; line-height: 1; flex: none; }
+.toast .toast-x:hover { background: rgba(90, 60, 130, .18); }
+@keyframes toastin {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ================= DOC PANEL ================= */
 #docpane { margin: 14px 14px 14px 0; min-width: 0; display: flex; flex-direction: column; }
 #docpane .dhdr { display: flex; align-items: center; gap: 9px; padding: 2px 6px 10px; }

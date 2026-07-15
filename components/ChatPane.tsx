@@ -9,7 +9,24 @@ import {
   stripDocumentForBubble,
 } from '@/lib/document';
 import Markdown from './Markdown';
-import { providerLabel, type Msg, type Provider } from '@/lib/llm';
+import { providerLabel, type Msg, type MsgPart, type Provider } from '@/lib/llm';
+import {
+  ACCEPT,
+  MAX_FILES,
+  canSend,
+  composeOutgoingText,
+  modalityIcon,
+  readFileAsBase64,
+  readFileAsText,
+  toMeta,
+  toMsgParts,
+  validateFile,
+  DEFAULT_SUPPORT,
+  type Attachment,
+  type AttachmentMeta,
+  type SupportMap,
+} from '@/lib/attachments';
+import { pushToast } from '@/lib/toast';
 import { drawTwo, type Technique } from '@/lib/techniques';
 import {
   extractBuilderNotes,
@@ -25,6 +42,10 @@ type UiMessage = {
   content: string;
   chips?: string[];
   error?: boolean;
+  /** Persistable metadata for the 📎 chips shown on the bubble. */
+  attachments?: AttachmentMeta[];
+  /** Provider-native binary parts (images/PDFs) — kept in-memory for re-sends. */
+  parts?: MsgPart[];
 };
 
 /** Rehydrated message shape passed in from the persisted thread. */
@@ -33,13 +54,31 @@ export type InitialMessage = {
   role: 'user' | 'assistant';
   content: string;
   chips?: string[] | null;
+  attachments?: AttachmentMeta[] | null;
 };
+
+/** Message shape posted to /api/chat: LLM parts + persistable attachment meta. */
+type ApiMessage = Msg & { attachments?: AttachmentMeta[] };
 
 let uid = 0;
 const nextId = () => `m${++uid}-${Date.now()}`;
 
-function toApiMessages(msgs: UiMessage[]): Msg[] {
-  return msgs.filter((m) => !m.error).map((m) => ({ role: m.role, content: m.content }));
+/**
+ * Serialize the thread for the API. Binary `parts` the CURRENT provider can't
+ * read are stripped (e.g. after switching to a text-only model) so a historical
+ * image never errors an unsupported upstream — the initial send was already
+ * gated + toasted. Attachment metadata rides along for persistence.
+ */
+function toApiMessages(msgs: UiMessage[], provider: Provider, support: SupportMap): ApiMessage[] {
+  return msgs
+    .filter((m) => !m.error)
+    .map((m) => {
+      const parts = m.parts?.filter((p) => support[provider][p.type]);
+      const out: ApiMessage = { role: m.role, content: m.content };
+      if (parts && parts.length > 0) out.parts = parts;
+      if (m.attachments && m.attachments.length > 0) out.attachments = m.attachments;
+      return out;
+    });
 }
 
 function seed(initial: InitialMessage[]): UiMessage[] {
@@ -48,8 +87,25 @@ function seed(initial: InitialMessage[]): UiMessage[] {
     role: m.role,
     content: m.content,
     chips: m.chips ?? undefined,
+    attachments: m.attachments ?? undefined,
   }));
 }
+
+/** Minimal Web Speech API typing (not in lib.dom across all TS versions). */
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+type SpeechWindow = Window & {
+  SpeechRecognition?: new () => SpeechRecognitionLike;
+  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+};
 
 export default function ChatPane({
   provider,
@@ -74,6 +130,11 @@ export default function ChatPane({
   const [streaming, setStreaming] = useState(false);
   const [notes, setNotes] = useState<BuilderNote[]>([]);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [recording, setRecording] = useState(false);
+  const [support, setSupport] = useState<SupportMap>(DEFAULT_SUPPORT);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const msgsRef = useRef<HTMLDivElement>(null);
   // The last document reported to the parent this turn — lets the trailing
   // artifact-id frame re-report the same doc with its persisted id attached.
@@ -93,6 +154,23 @@ export default function ChatPane({
       })
       .catch(() => {
         /* leave the technique row hidden if the catalog can't load */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Probe server-resolved modality support (OpenRouter model/env aware). Until it
+  // lands, DEFAULT_SUPPORT (openrouter text-only) keeps the gate safe.
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/capabilities')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('capabilities fetch failed'))))
+      .then((data: { support?: SupportMap }) => {
+        if (alive && data.support) setSupport(data.support);
+      })
+      .catch(() => {
+        /* keep the safe default */
       });
     return () => {
       alive = false;
@@ -185,7 +263,7 @@ export default function ChatPane({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: toApiMessages(history),
+          messages: toApiMessages(history, provider, support),
           provider,
           technique,
           conversationId,
@@ -287,17 +365,126 @@ export default function ChatPane({
     void runChat(next, t.id);
   }
 
-  function sendMessage(text: string) {
-    if (streaming || !text.trim()) return;
-    const next: UiMessage[] = [...messages, { id: nextId(), role: 'user', content: text.trim() }];
-    void runChat(next);
+  function removeAttachment(id: string) {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  async function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ''; // let the same file be re-picked later
+    if (files.length === 0) return;
+    const accepted: Attachment[] = [];
+    for (const file of files) {
+      if (attachments.length + accepted.length >= MAX_FILES) {
+        pushToast(`You can attach up to ${MAX_FILES} files.`, { tone: 'warn' });
+        break;
+      }
+      const v = validateFile(file);
+      if (!v.ok) {
+        pushToast(v.reason, { tone: 'warn' });
+        continue;
+      }
+      try {
+        if (v.modality === 'text') {
+          const text = await readFileAsText(file);
+          accepted.push({
+            id: nextId(),
+            name: file.name,
+            mimeType: file.type || 'text/plain',
+            size: file.size,
+            modality: 'text',
+            text,
+          });
+        } else {
+          const data = await readFileAsBase64(file);
+          accepted.push({
+            id: nextId(),
+            name: file.name,
+            mimeType: file.type,
+            size: file.size,
+            modality: v.modality,
+            data,
+          });
+        }
+      } catch {
+        pushToast(`Couldn't read ${file.name}.`, { tone: 'warn' });
+      }
+    }
+    if (accepted.length > 0) setAttachments((prev) => [...prev, ...accepted]);
+  }
+
+  function onMicClick() {
+    if (recording) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const w = window as unknown as SpeechWindow;
+    const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+    if (!Ctor) {
+      pushToast("Voice input isn't supported in this browser.", { tone: 'warn' });
+      return;
+    }
+    const rec = new Ctor();
+    rec.lang = 'en-US';
+    rec.interimResults = false;
+    rec.continuous = false;
+    rec.onresult = (ev) => {
+      const transcript = Array.from(ev.results)
+        .map((r) => r[0]?.transcript ?? '')
+        .join(' ')
+        .trim();
+      if (transcript) setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+    };
+    rec.onerror = () => setRecording(false);
+    rec.onend = () => {
+      setRecording(false);
+      recognitionRef.current = null;
+    };
+    recognitionRef.current = rec;
+    setRecording(true);
+    try {
+      rec.start();
+    } catch {
+      setRecording(false);
+      recognitionRef.current = null;
+    }
+  }
+
+  function sendMessage(text: string, atts: Attachment[] = attachments) {
+    if (streaming) return;
+    // Capability gate: block an image/PDF the current model can't read — toast
+    // and KEEP the attachment (never silently drop). Text docs always pass.
+    const gate = canSend(provider, atts, support);
+    if (!gate.ok) {
+      const noun = gate.blocked === 'pdf' ? 'PDFs' : 'images';
+      pushToast(
+        `The current ${providerLabel(provider)} model can't read ${noun} — switch to Gemini in the header, or set a vision-capable model.`,
+        { tone: 'warn', duration: 6000 },
+      );
+      return;
+    }
+    const textDocs = atts
+      .filter((a) => a.modality === 'text')
+      .map((a) => ({ name: a.name, text: a.text ?? '' }));
+    const content = composeOutgoingText(text.trim(), textDocs);
+    if (!content && atts.length === 0) return;
+    const parts = toMsgParts(atts);
+    const meta = atts.map(toMeta);
+    const userMsg: UiMessage = {
+      id: nextId(),
+      role: 'user',
+      content,
+      attachments: meta.length > 0 ? meta : undefined,
+      parts: parts.length > 0 ? parts : undefined,
+    };
+    setInput('');
+    setAttachments([]);
+    void runChat([...messages, userMsg]);
   }
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const text = input;
-    setInput('');
-    sendMessage(text);
+    sendMessage(input);
   }
 
   const lastMessage = messages[messages.length - 1];
@@ -392,6 +579,15 @@ export default function ChatPane({
                 ''
               )}
             </div>
+            {m.attachments && m.attachments.length > 0 && (
+              <div className={`msgattach ${m.role === 'user' ? 'mine' : ''}`}>
+                {m.attachments.map((a, i) => (
+                  <span className="attach mini" key={i} title={a.name}>
+                    📎 {a.name}
+                  </span>
+                ))}
+              </div>
+            )}
             {m.chips && m.chips.length > 0 && m.id === lastMessage?.id && (
               <div className="chips">
                 <span className="lbl">Mary suggests</span>
@@ -439,14 +635,64 @@ export default function ChatPane({
       )}
 
       <form className="inputw" onSubmit={onSubmit}>
+        {attachments.length > 0 && (
+          <div className="attachrow">
+            {attachments.map((a) => (
+              <span key={a.id} className={`attach ${a.modality}`} title={a.name}>
+                <span className="attach-ico">{modalityIcon(a.modality)}</span>
+                <span className="attach-name">{a.name}</span>
+                <button
+                  type="button"
+                  className="attach-x"
+                  onClick={() => removeAttachment(a.id)}
+                  aria-label={`Remove ${a.name}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="input">
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="filehide"
+            multiple
+            accept={ACCEPT}
+            onChange={onPickFiles}
+          />
+          <button
+            type="button"
+            className="iconbtn attachbtn"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={streaming}
+            aria-label="Attach files"
+            title="Attach images, PDFs, or text/markdown"
+          >
+            📎
+          </button>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Tell Mary what you're chewing on…"
             disabled={streaming}
           />
-          <button type="submit" className="send" disabled={streaming || !input.trim()}>
+          <button
+            type="button"
+            className={`iconbtn micbtn${recording ? ' rec' : ''}`}
+            onClick={onMicClick}
+            disabled={streaming}
+            aria-label={recording ? 'Stop recording' : 'Voice input'}
+            title="Voice input"
+          >
+            🎙
+          </button>
+          <button
+            type="submit"
+            className="send"
+            disabled={streaming || (!input.trim() && attachments.length === 0)}
+          >
             ↑
           </button>
         </div>

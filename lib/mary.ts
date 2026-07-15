@@ -23,6 +23,10 @@ End EVERY reply with exactly one chips block on its own line, containing a JSON 
 <chips>["🔥 Pressure-test it","⛏️ Keep digging","🎲 Switch technique"]</chips>
 The chips are the user's likely next moves given where the conversation is — vary them with context. Never mention the chips block in your prose; the app renders it as buttons.`;
 
+// App-native note: the composer can attach images, PDFs, and text/markdown docs.
+export const ATTACHMENTS_NOTE = `ATTACHMENTS — the user may attach files to a message:
+Images and PDFs arrive as native content you can see directly; text and markdown files are inlined into the message, each prefixed with "[Attached: filename]". When something is attached, actually use it — read it, describe it, fold it into the brainstorming — rather than ignoring it. (Attachments are ephemeral: you see them this turn, not across sessions.)`;
+
 // App-native note: at synthesis/wrap-up Mary now emits a <document> block that
 // the app renders in the live doc pane (and persists as a versioned artifact).
 // This is the browser equivalent of finalize.md writing an artifact file.
@@ -100,6 +104,7 @@ export function buildMarySystemPrompt(techniqueId?: string): string {
     `TECHNIQUE CATALOG — the full BMad brainstorming catalog, grouped by category (name — gist). Any of these is fair game; when the user launches one, open it working from its gist below.\n\n${buildCatalog()}`,
     buildPhases(),
     HONEST_LIMITS,
+    ATTACHMENTS_NOTE,
     DOCUMENT_PROTOCOL,
     CHIPS_PROTOCOL,
   ];

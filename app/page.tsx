@@ -5,6 +5,7 @@ import Sidebar, { type ConversationSummary } from '@/components/Sidebar';
 import ChatPane, { type InitialMessage } from '@/components/ChatPane';
 import DocPane, { type DocState } from '@/components/DocPane';
 import Gutter from '@/components/Gutter';
+import Toaster from '@/components/Toaster';
 import type { Provider } from '@/lib/llm';
 
 export default function Home() {
@@ -129,6 +130,7 @@ export default function Home() {
   }, []);
 
   return (
+    <>
     <div id="app" style={{ gridTemplateColumns: `${sideW}px 6px minmax(320px, 1fr) 6px ${docW}px` }}>
       <Sidebar
         onNew={onNew}
@@ -150,5 +152,7 @@ export default function Home() {
       <Gutter start={docW} min={320} max={760} dir={-1} onDrag={setDocW} />
       <DocPane doc={doc} />
     </div>
+    <Toaster />
+    </>
   );
 }

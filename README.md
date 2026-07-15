@@ -15,7 +15,42 @@ no accounts, no persistence beyond the current browser tab in this first slice.
 | `GEMINI_MODEL` | no | `gemini-2.5-flash` | Gemini model id |
 | `OPENROUTER_API_KEY` | only if using OpenRouter | — | OpenRouter API key |
 | `OPENROUTER_MODEL` | no | `meta-llama/llama-3.3-70b-instruct:free` | OpenRouter model id (pick any free-tier model) |
+| `OPENROUTER_MULTIMODAL` | no | `false` | Force image/PDF support on for OpenRouter. See [Attachments](#attachments-images-pdfs-docs--voice). |
 | `DATABASE_URL` | no (optional) | — | Neon Postgres connection string. **Unset → the app runs exactly as before** (ephemeral, in-tab conversations). Set + migrated → conversations and history persist. |
+
+## Attachments (images, PDFs, docs) + voice
+
+The composer has a 📎 attach button (images `png/jpeg/webp/gif`, `application/pdf`, and
+`text/plain` / `text/markdown`) and a 🎙 voice button. Limits: **10MB per file, up to 4 files**;
+oversize/unsupported files raise a toast and aren't attached.
+
+- **Text/markdown docs** are read in the browser and **inlined** into the message
+  (`[Attached: name]\n<content>`) — so they work on **any** model.
+- **Images and PDFs** are sent as provider-native multimodal parts.
+- **Voice** uses the browser's Web Speech API (`webkitSpeechRecognition`/`SpeechRecognition`) to
+  transcribe speech into the input — no audio bytes ever leave the browser. If the browser lacks
+  the API, a toast says so.
+- Only lightweight **attachment metadata** (filename, mime type, size) is persisted on the message
+  row; binaries are ephemeral (a refreshed thread shows a `📎 filename` chip, not the image).
+
+### Which models can read images/PDFs?
+
+Not every model is multimodal, so the app **gates by capability** and warns before sending:
+
+| Provider | Image / PDF support |
+|---|---|
+| **Gemini** | Always (images + PDFs). |
+| **OpenRouter** | **Text-only by default.** Enabled only if `OPENROUTER_MODEL` matches a known-vision allowlist — model ids containing `gpt-4o`, `claude-3`, `gemini`, `llama-3.2-vision`, `qwen…-vl`, or `pixtral` — **or** `OPENROUTER_MULTIMODAL=true`. |
+
+If you attach an image/PDF while on an OpenRouter model that can't read it, the send is **blocked**
+with a toast ("switch to Gemini … or set a vision-capable model") and the attachment is kept —
+never silently dropped. Text-doc attachments never trigger this. The allowlist lives in
+`lib/attachments.ts` (`OPENROUTER_VISION_PATTERNS`) and is builder-tunable.
+
+> **Schema note:** attachment metadata lives in a `messages.attachments jsonb` column. Because
+> `db/schema.sql` is applied with `CREATE TABLE IF NOT EXISTS` (no `ALTER`), the column is created
+> automatically only on a **fresh** database. On an **already-migrated live DB**, add it once with:
+> `ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachments jsonb;`
 
 Copy `.env.example` to `.env` and fill in the values you plan to use. You only need keys for the
 provider(s) you intend to select in the UI's model toggle — the other can be left blank.

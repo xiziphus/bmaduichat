@@ -5,7 +5,59 @@
  */
 
 export type Provider = 'gemini' | 'openrouter';
-export type Msg = { role: 'user' | 'assistant'; content: string };
+
+/**
+ * A non-text attachment carried alongside a message's text. Images and PDFs
+ * travel as base64 (no data: prefix). Text/markdown docs are NOT parts — they
+ * are inlined into `content` client-side, so they work on any model.
+ */
+export type MsgPart =
+  | { type: 'image'; mimeType: string; data: string }
+  | { type: 'pdf'; mimeType: string; data: string };
+
+export type Msg = {
+  role: 'user' | 'assistant';
+  content: string;
+  /** Provider-native multimodal parts (images/PDFs). Absent for plain text. */
+  parts?: MsgPart[];
+};
+
+/* ---------------- provider payload builders (pure; exported for tests) ---------------- */
+
+/**
+ * Gemini `contents[].parts` for one message. Byte-identical to the legacy
+ * text-only shape (`[{ text }]`) when the message has no attachments.
+ */
+export function geminiParts(m: Msg): unknown[] {
+  const parts: unknown[] = [{ text: m.content }];
+  if (m.parts) {
+    for (const p of m.parts) {
+      parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } });
+    }
+  }
+  return parts;
+}
+
+/**
+ * One OpenRouter (OpenAI-compat) message. Byte-identical to the legacy shape
+ * (`{ role, content: string }`) when there are no attachments; otherwise
+ * `content` becomes a parts array with `image_url` / `file` entries.
+ */
+export function openRouterMessage(m: Msg): { role: string; content: unknown } {
+  if (!m.parts || m.parts.length === 0) {
+    return { role: m.role, content: m.content };
+  }
+  const content: unknown[] = [{ type: 'text', text: m.content }];
+  for (const p of m.parts) {
+    const dataUrl = `data:${p.mimeType};base64,${p.data}`;
+    if (p.type === 'image') {
+      content.push({ type: 'image_url', image_url: { url: dataUrl } });
+    } else {
+      content.push({ type: 'file', file: { filename: 'document.pdf', file_data: dataUrl } });
+    }
+  }
+  return { role: m.role, content };
+}
 
 export type ProviderErrorKind = 'missing-key' | 'upstream' | 'timeout' | 'unreachable';
 
@@ -142,7 +194,7 @@ async function streamGemini(system: string, messages: Msg[]): Promise<ReadableSt
       system_instruction: { parts: [{ text: system }] },
       contents: messages.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
+        parts: geminiParts(m),
       })),
     }),
   });
@@ -179,7 +231,7 @@ async function streamOpenRouter(system: string, messages: Msg[]): Promise<Readab
     body: JSON.stringify({
       model,
       stream: true,
-      messages: [{ role: 'system', content: system }, ...messages],
+      messages: [{ role: 'system', content: system }, ...messages.map(openRouterMessage)],
     }),
   });
 

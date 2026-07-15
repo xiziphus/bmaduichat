@@ -72,42 +72,62 @@ describe('conversations repo — SQL/param shape', () => {
 });
 
 describe('messages repo — SQL/param shape', () => {
-  it('listMessages orders by monotonic seq (not created) and aliases chips_json', async () => {
+  it('listMessages orders by monotonic seq (not created), aliases chips_json + selects attachments', async () => {
     const { exec, calls } = mockExec([]);
     await listMessages('c1', exec);
     const sql = norm(calls[0].text);
     expect(sql).toContain('chips_json AS chips');
+    expect(sql).toContain('attachments');
     expect(sql).toContain('WHERE conversation_id = $1');
     expect(sql).toContain('ORDER BY seq ASC');
     expect(sql).not.toContain('ORDER BY created');
     expect(calls[0].params).toEqual(['c1']);
   });
 
-  it('appendMessage serializes chips to JSON when present', async () => {
+  it('appendMessage serializes chips to JSON when present (attachments null)', async () => {
     const { exec, calls } = mockExec([{ id: 'm1' }]);
     await appendMessage(
       { conversationId: 'c1', role: 'assistant', content: 'hey', chips: ['a', 'b'] },
       exec,
     );
-    expect(norm(calls[0].text)).toContain('INSERT INTO messages (conversation_id, role, content, chips_json)');
-    expect(calls[0].params).toEqual(['c1', 'assistant', 'hey', JSON.stringify(['a', 'b'])]);
+    expect(norm(calls[0].text)).toContain(
+      'INSERT INTO messages (conversation_id, role, content, chips_json, attachments)',
+    );
+    expect(calls[0].params).toEqual(['c1', 'assistant', 'hey', JSON.stringify(['a', 'b']), null]);
   });
 
   it('buildAppendMessageQuery produces an INSERT with no RETURNING (transaction-safe)', () => {
     const q = buildAppendMessageQuery({ conversationId: 'c1', role: 'user', content: 'hi' });
-    expect(norm(q.text)).toContain('INSERT INTO messages (conversation_id, role, content, chips_json)');
+    expect(norm(q.text)).toContain(
+      'INSERT INTO messages (conversation_id, role, content, chips_json, attachments)',
+    );
     expect(norm(q.text)).not.toContain('RETURNING');
-    expect(q.params).toEqual(['c1', 'user', 'hi', null]);
+    expect(q.params).toEqual(['c1', 'user', 'hi', null, null]);
   });
 
-  it('appendMessage stores null chips for user messages / empty arrays', async () => {
+  it('buildAppendMessageQuery serializes attachment metadata to jsonb when present', () => {
+    const atts = [{ name: 'shot.png', mimeType: 'image/png', size: 1234 }];
+    const q = buildAppendMessageQuery({
+      conversationId: 'c1',
+      role: 'user',
+      content: 'look',
+      attachments: atts,
+    });
+    expect(q.params).toEqual(['c1', 'user', 'look', null, JSON.stringify(atts)]);
+  });
+
+  it('appendMessage stores null chips/attachments for user messages / empty arrays', async () => {
     const { exec, calls } = mockExec([{ id: 'm1' }]);
     await appendMessage({ conversationId: 'c1', role: 'user', content: 'hi' }, exec);
-    expect(calls[0].params).toEqual(['c1', 'user', 'hi', null]);
+    expect(calls[0].params).toEqual(['c1', 'user', 'hi', null, null]);
 
     const { exec: exec2, calls: calls2 } = mockExec([{ id: 'm2' }]);
-    await appendMessage({ conversationId: 'c1', role: 'assistant', content: 'x', chips: [] }, exec2);
+    await appendMessage(
+      { conversationId: 'c1', role: 'assistant', content: 'x', chips: [], attachments: [] },
+      exec2,
+    );
     expect(calls2[0].params?.[3]).toBeNull();
+    expect(calls2[0].params?.[4]).toBeNull();
   });
 });
 

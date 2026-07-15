@@ -4,6 +4,7 @@ import { buildMarySystemPrompt } from '@/lib/mary';
 import { streamChat, ProviderError, providerLabel, type Msg, type Provider } from '@/lib/llm';
 import { isPersistenceEnabled, transaction } from '@/lib/db';
 import { buildAppendMessageQuery } from '@/lib/repo/messages';
+import type { AttachmentMeta } from '@/lib/attachments';
 import { createVersion } from '@/lib/repo/artifacts';
 import { parseChips } from '@/lib/chips';
 import { parseDocument } from '@/lib/document';
@@ -17,12 +18,18 @@ type ChatBody = {
   conversationId?: unknown;
 };
 
-function isMsg(m: unknown): m is Msg {
+/** A chat message as posted by the client: an LLM `Msg` plus optional
+ *  attachment metadata (persisted, not sent to the model). */
+type ChatMessage = Msg & { attachments?: AttachmentMeta[] };
+
+function isMsg(m: unknown): m is ChatMessage {
   return (
     typeof m === 'object' &&
     m !== null &&
     ((m as Msg).role === 'user' || (m as Msg).role === 'assistant') &&
-    typeof (m as Msg).content === 'string'
+    typeof (m as Msg).content === 'string' &&
+    // `parts` (image/pdf) is optional but must be an array when present.
+    ((m as Msg).parts === undefined || Array.isArray((m as Msg).parts))
   );
 }
 
@@ -61,8 +68,12 @@ export async function POST(req: NextRequest) {
       : undefined;
   const persist = isPersistenceEnabled() && conversationId !== undefined;
 
-  const lastMsg = body.messages[body.messages.length - 1] as Msg;
+  const lastMsg = body.messages[body.messages.length - 1] as ChatMessage;
   const userTurn = persist && lastMsg.role === 'user' ? lastMsg.content : undefined;
+  const userAttachments =
+    persist && lastMsg.role === 'user' && Array.isArray(lastMsg.attachments)
+      ? lastMsg.attachments
+      : undefined;
 
   let tokens: ReadableStream<string>;
   try {
@@ -112,7 +123,12 @@ export async function POST(req: NextRequest) {
           try {
             if (text || chips.length > 0) {
               await transaction([
-                buildAppendMessageQuery({ conversationId, role: 'user', content: userTurn }),
+                buildAppendMessageQuery({
+                  conversationId,
+                  role: 'user',
+                  content: userTurn,
+                  attachments: userAttachments,
+                }),
                 buildAppendMessageQuery({ conversationId, role: 'assistant', content: text, chips }),
               ]);
             }

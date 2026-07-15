@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS messages (
   role            text NOT NULL CHECK (role IN ('user', 'assistant')),
   content         text NOT NULL,
   chips_json      jsonb,
+  -- Lightweight attachment metadata only (filename/mimeType/size) — never the
+  -- binary. Populated by Epic E's multimodal composer; null for text-only turns.
+  attachments     jsonb,
   -- Monotonic insertion order. `created` (now()) is the transaction-start time,
   -- so two rows inserted in one transaction share a timestamp; `seq` gives each
   -- row a distinct, ordered value so a thread always sorts user-before-assistant.

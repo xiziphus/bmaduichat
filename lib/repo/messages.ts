@@ -5,6 +5,7 @@
  * Callers must gate on isPersistenceEnabled() before invoking.
  */
 import { query, type QueryFn, type TxQuery } from '@/lib/db';
+import type { AttachmentMeta } from '@/lib/attachments';
 
 export type Message = {
   id: string;
@@ -12,6 +13,7 @@ export type Message = {
   role: 'user' | 'assistant';
   content: string;
   chips: string[] | null;
+  attachments: AttachmentMeta[] | null;
   created: string;
 };
 
@@ -20,6 +22,8 @@ export type MessageInput = {
   role: 'user' | 'assistant';
   content: string;
   chips?: string[] | null;
+  /** Lightweight metadata only (filename/mime/size) — never the binary. */
+  attachments?: AttachmentMeta[] | null;
 };
 
 /**
@@ -32,7 +36,7 @@ export async function listMessages(
   exec: QueryFn = query,
 ): Promise<Message[]> {
   return exec<Message>(
-    `SELECT id, conversation_id, role, content, chips_json AS chips, created
+    `SELECT id, conversation_id, role, content, chips_json AS chips, attachments, created
        FROM messages
       WHERE conversation_id = $1
       ORDER BY seq ASC`,
@@ -44,10 +48,14 @@ export async function listMessages(
 export function buildAppendMessageQuery(input: MessageInput): TxQuery {
   const chips =
     input.chips && input.chips.length > 0 ? JSON.stringify(input.chips) : null;
+  const attachments =
+    input.attachments && input.attachments.length > 0
+      ? JSON.stringify(input.attachments)
+      : null;
   return {
-    text: `INSERT INTO messages (conversation_id, role, content, chips_json)
-                VALUES ($1, $2, $3, $4::jsonb)`,
-    params: [input.conversationId, input.role, input.content, chips],
+    text: `INSERT INTO messages (conversation_id, role, content, chips_json, attachments)
+                VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)`,
+    params: [input.conversationId, input.role, input.content, chips, attachments],
   };
 }
 
@@ -59,7 +67,7 @@ export async function appendMessage(
   const { text, params } = buildAppendMessageQuery(input);
   const rows = await exec<Message>(
     `${text}
-       RETURNING id, conversation_id, role, content, chips_json AS chips, created`,
+       RETURNING id, conversation_id, role, content, chips_json AS chips, attachments, created`,
     params,
   );
   return rows[0];
