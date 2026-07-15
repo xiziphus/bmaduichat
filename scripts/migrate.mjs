@@ -27,13 +27,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const schemaPath = join(here, '..', 'db', 'schema.sql');
 const schema = readFileSync(schemaPath, 'utf8');
 
-// Split into individual statements. The schema uses no semicolons inside
-// literals or dollar-quoted bodies, so a naive split on ';' is safe here.
-// Fragments that are only SQL comments/whitespace are dropped.
+// Strip line comments FIRST (they can contain semicolons, which would
+// otherwise break the split), then split into individual statements. The
+// schema uses no semicolons inside string literals or dollar-quoted bodies.
 const statements = schema
+  .replace(/--.*$/gm, '')
   .split(';')
   .map((s) => s.trim())
-  .filter((s) => s.replace(/--.*$/gm, '').trim().length > 0);
+  .filter((s) => s.length > 0);
 
 const sql = neon(url);
 
