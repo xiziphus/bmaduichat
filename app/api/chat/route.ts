@@ -8,6 +8,7 @@ import type { AttachmentMeta } from '@/lib/attachments';
 import { createVersion } from '@/lib/repo/artifacts';
 import { parseChips } from '@/lib/chips';
 import { parseDocument } from '@/lib/document';
+import { parseReferences, resolveReferences } from '@/lib/references';
 
 export const runtime = 'nodejs';
 
@@ -16,7 +17,27 @@ type ChatBody = {
   provider?: unknown;
   technique?: unknown;
   conversationId?: unknown;
+  references?: unknown;
 };
+
+/**
+ * Append resolved reference context to the LAST user turn for THIS request only.
+ * Injected content is never persisted (we persist the original `userTurn`).
+ */
+function injectReferenceContext(messages: ChatMessage[], context: string): ChatMessage[] {
+  if (!context) return messages;
+  const out = messages.slice();
+  for (let i = out.length - 1; i >= 0; i--) {
+    if (out[i].role === 'user') {
+      out[i] = {
+        ...out[i],
+        content: `${out[i].content}\n\n${context}`,
+      };
+      break;
+    }
+  }
+  return out;
+}
 
 /** A chat message as posted by the client: an LLM `Msg` plus optional
  *  attachment metadata (persisted, not sent to the model). */
@@ -75,9 +96,24 @@ export async function POST(req: NextRequest) {
       ? lastMsg.attachments
       : undefined;
 
+  // Resolve @-references SERVER-SIDE (never trust client-sent content). Needs the
+  // DB; when persistence is off, references are silently skipped. Injected into
+  // this request's context only — not persisted.
+  const references = parseReferences(body.references);
+  let modelMessages = body.messages as ChatMessage[];
+  if (isPersistenceEnabled() && references.length > 0) {
+    try {
+      const { context } = await resolveReferences(references);
+      modelMessages = injectReferenceContext(modelMessages, context);
+    } catch (err) {
+      console.error('[chat] reference resolution failed', err instanceof Error ? err.name : typeof err);
+      // Degrade gracefully — send the turn without injected references.
+    }
+  }
+
   let tokens: ReadableStream<string>;
   try {
-    tokens = await streamChat(provider as Provider, system, body.messages);
+    tokens = await streamChat(provider as Provider, system, modelMessages);
   } catch (err) {
     if (err instanceof ProviderError) {
       // Log provider + status only — never upstream response bodies.

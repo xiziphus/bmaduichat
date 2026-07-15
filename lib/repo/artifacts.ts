@@ -92,6 +92,35 @@ export async function getLatestForConversation(
   return rows[0] ?? null;
 }
 
+export type ArtifactSummary = {
+  id: string;
+  conversation_id: string;
+  title: string | null;
+  version: number;
+  created: string;
+};
+
+/**
+ * Artifacts whose title matches `q` (case-insensitive substring), newest first.
+ * Powers the `@`-mention autocomplete. An empty `q` matches everything (returns
+ * the most recent, capped by `limit`). Untitled artifacts are excluded.
+ */
+export async function searchArtifacts(
+  q: string,
+  limit = 8,
+  exec: QueryFn = query,
+): Promise<ArtifactSummary[]> {
+  return exec<ArtifactSummary>(
+    `SELECT id, conversation_id, title, version, created
+       FROM artifacts
+      WHERE title IS NOT NULL
+        AND title ILIKE $1
+      ORDER BY created DESC
+      LIMIT $2`,
+    [`%${q}%`, limit],
+  );
+}
+
 /** A single artifact by id, or null when missing. */
 export async function getById(
   id: string,

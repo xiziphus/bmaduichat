@@ -5,6 +5,8 @@ import {
   createConversation,
   getConversation,
   setArchived,
+  updateTitle,
+  searchConversations,
 } from '@/lib/repo/conversations';
 import { listMessages, appendMessage, buildAppendMessageQuery } from '@/lib/repo/messages';
 import {
@@ -12,6 +14,7 @@ import {
   createVersion,
   getLatestForConversation,
   getById,
+  searchArtifacts,
 } from '@/lib/repo/artifacts';
 
 /** Records the last SQL text + params, returns a canned row set. */
@@ -68,6 +71,46 @@ describe('conversations repo — SQL/param shape', () => {
     expect(norm(calls[0].text)).toContain('SET archived = $2');
     expect(calls[0].params).toEqual(['c1', true]);
     expect(out).toEqual(row);
+  });
+
+  it('updateTitle sets title = $2 and trims the value', async () => {
+    const row = { id: 'c1', title: 'New', agent_slug: 'mary', created: 't', archived: false };
+    const { exec, calls } = mockExec([row]);
+    const out = await updateTitle('c1', '  New  ', exec);
+    expect(norm(calls[0].text)).toContain('SET title = $2');
+    expect(norm(calls[0].text)).toContain('RETURNING id, title, agent_slug, created, archived');
+    expect(calls[0].params).toEqual(['c1', 'New']);
+    expect(out).toEqual(row);
+  });
+
+  it('updateTitle clears to null on empty/blank/null (auto-title fallback)', async () => {
+    const { exec: e1, calls: c1 } = mockExec([{ id: 'c1' }]);
+    await updateTitle('c1', '', e1);
+    expect(c1[0].params).toEqual(['c1', null]);
+
+    const { exec: e2, calls: c2 } = mockExec([{ id: 'c1' }]);
+    await updateTitle('c1', '   ', e2);
+    expect(c2[0].params).toEqual(['c1', null]);
+
+    const { exec: e3, calls: c3 } = mockExec([{ id: 'c1' }]);
+    await updateTitle('c1', null, e3);
+    expect(c3[0].params).toEqual(['c1', null]);
+  });
+
+  it('updateTitle returns null when the conversation is missing', async () => {
+    const { exec } = mockExec([]);
+    expect(await updateTitle('gone', 'x', exec)).toBeNull();
+  });
+
+  it('searchConversations filters non-archived by ILIKE effective-title, limited', async () => {
+    const { exec, calls } = mockExec([]);
+    await searchConversations('foo', 8, exec);
+    const sql = norm(calls[0].text);
+    expect(sql).toContain('WHERE c.archived = false');
+    expect(sql).toContain('ILIKE $1');
+    expect(sql).toContain('LIMIT $2');
+    expect(sql).toContain('ORDER BY c.created DESC');
+    expect(calls[0].params).toEqual(['%foo%', 8]);
   });
 });
 
@@ -199,5 +242,17 @@ describe('artifacts repo — SQL/param shape', () => {
     expect(norm(calls[0].text)).toContain('WHERE id = $1');
     expect(calls[0].params).toEqual(['a9']);
     expect(out).toBeNull();
+  });
+
+  it('searchArtifacts filters titled artifacts by ILIKE, newest first, limited', async () => {
+    const { exec, calls } = mockExec([]);
+    await searchArtifacts('pitch', 8, exec);
+    const sql = norm(calls[0].text);
+    expect(sql).toContain('FROM artifacts');
+    expect(sql).toContain('title IS NOT NULL');
+    expect(sql).toContain('ILIKE $1');
+    expect(sql).toContain('ORDER BY created DESC');
+    expect(sql).toContain('LIMIT $2');
+    expect(calls[0].params).toEqual(['%pitch%', 8]);
   });
 });

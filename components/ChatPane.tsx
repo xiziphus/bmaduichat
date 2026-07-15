@@ -35,6 +35,10 @@ import {
 } from '@/lib/builder-notes';
 import ModelToggle from './ModelToggle';
 import type { DocState } from './DocPane';
+import { activeMentionQuery, stripRange, type Reference } from '@/lib/mentions';
+
+/** One autocomplete row from GET /api/references. */
+type MentionItem = { type: 'conversation' | 'artifact'; id: string; title: string };
 
 type UiMessage = {
   id: string;
@@ -133,6 +137,13 @@ export default function ChatPane({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [recording, setRecording] = useState(false);
   const [support, setSupport] = useState<SupportMap>(DEFAULT_SUPPORT);
+  // @-references picked from the autocomplete — sent as {type,id} on the next
+  // send; the server resolves their content. Pills render above the composer.
+  const [references, setReferences] = useState<Reference[]>([]);
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
+  const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const textInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const msgsRef = useRef<HTMLDivElement>(null);
@@ -193,6 +204,30 @@ export default function ChatPane({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
+  // Fetch @-mention candidates as the query changes. Auth + DB resolution stay
+  // server-side; no DB → empty lists → "no matches" (never errors).
+  useEffect(() => {
+    if (mention === null) {
+      setMentionItems([]);
+      return;
+    }
+    let alive = true;
+    fetch(`/api/references?q=${encodeURIComponent(mention.query)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('references fetch failed'))))
+      .then((data: { conversations?: MentionItem[]; artifacts?: MentionItem[] }) => {
+        if (!alive) return;
+        const items = [...(data.conversations ?? []), ...(data.artifacts ?? [])];
+        setMentionItems(items);
+        setMentionIndex(0);
+      })
+      .catch(() => {
+        if (alive) setMentionItems([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [mention]);
+
   function shuffleTechniques() {
     if (!pair || streaming || catalog.length < 2) return;
     setPair(drawTwo(catalog, pair.map((t) => t.id)));
@@ -235,7 +270,7 @@ export default function ChatPane({
     }
   }
 
-  async function runChat(history: UiMessage[], technique?: string) {
+  async function runChat(history: UiMessage[], technique?: string, refs: Reference[] = []) {
     setStreaming(true);
     const placeholderId = nextId();
     setMessages([...history, { id: placeholderId, role: 'assistant', content: '' }]);
@@ -267,6 +302,8 @@ export default function ChatPane({
           provider,
           technique,
           conversationId,
+          // Send only {type,id}; the server resolves the content.
+          references: refs.length > 0 ? refs.map((r) => ({ type: r.type, id: r.id })) : undefined,
         }),
       });
 
@@ -477,14 +514,63 @@ export default function ChatPane({
       attachments: meta.length > 0 ? meta : undefined,
       parts: parts.length > 0 ? parts : undefined,
     };
+    const refs = references;
     setInput('');
     setAttachments([]);
-    void runChat([...messages, userMsg]);
+    setReferences([]);
+    setMention(null);
+    void runChat([...messages, userMsg], undefined, refs);
   }
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     sendMessage(input);
+  }
+
+  // Composer change: track text AND detect an active @-mention at the caret.
+  function onInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setInput(value);
+    const caret = e.target.selectionStart ?? value.length;
+    setMention(activeMentionQuery(value, caret));
+  }
+
+  // Pick an autocomplete row: strip the raw `@token` from the text and bind a
+  // reference pill (deduped). Content is never carried — only {type,id,title}.
+  function pickMention(item: MentionItem) {
+    if (mention) {
+      const caret = textInputRef.current?.selectionStart ?? mention.start + mention.query.length + 1;
+      setInput((prev) => stripRange(prev, mention.start, caret));
+    }
+    setReferences((prev) =>
+      prev.some((r) => r.type === item.type && r.id === item.id)
+        ? prev
+        : [...prev, { type: item.type, id: item.id, title: item.title }],
+    );
+    setMention(null);
+    setMentionItems([]);
+    textInputRef.current?.focus();
+  }
+
+  function removeReference(item: Reference) {
+    setReferences((prev) => prev.filter((r) => !(r.type === item.type && r.id === item.id)));
+  }
+
+  function onInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (mention === null || mentionItems.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setMentionIndex((i) => (i + 1) % mentionItems.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMentionIndex((i) => (i - 1 + mentionItems.length) % mentionItems.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      pickMention(mentionItems[mentionIndex]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setMention(null);
+    }
   }
 
   const lastMessage = messages[messages.length - 1];
@@ -635,6 +721,50 @@ export default function ChatPane({
       )}
 
       <form className="inputw" onSubmit={onSubmit}>
+        {mention !== null && (
+          <div className="mentionpop" role="listbox" aria-label="Reference a conversation or document">
+            {mentionItems.length === 0 ? (
+              <div className="mentionempty">No matches</div>
+            ) : (
+              mentionItems.map((item, i) => (
+                <button
+                  key={`${item.type}:${item.id}`}
+                  type="button"
+                  role="option"
+                  aria-selected={i === mentionIndex}
+                  className={`mentionitem${i === mentionIndex ? ' on' : ''}`}
+                  onMouseDown={(e) => {
+                    // mousedown (not click) so the input doesn't blur first.
+                    e.preventDefault();
+                    pickMention(item);
+                  }}
+                  onMouseEnter={() => setMentionIndex(i)}
+                >
+                  <span className="mentiontype">{item.type === 'conversation' ? '💬' : '📄'}</span>
+                  <span className="mentiontitle">{item.title}</span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+        {references.length > 0 && (
+          <div className="attachrow refrow">
+            {references.map((r) => (
+              <span key={`${r.type}:${r.id}`} className="attach refpill" title={r.title}>
+                <span className="attach-ico">{r.type === 'conversation' ? '💬' : '📄'}</span>
+                <span className="attach-name">@{r.title}</span>
+                <button
+                  type="button"
+                  className="attach-x"
+                  onClick={() => removeReference(r)}
+                  aria-label={`Remove reference ${r.title}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         {attachments.length > 0 && (
           <div className="attachrow">
             {attachments.map((a) => (
@@ -673,9 +803,12 @@ export default function ChatPane({
             📎
           </button>
           <input
+            ref={textInputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Tell Mary what you're chewing on…"
+            onChange={onInputChange}
+            onKeyDown={onInputKeyDown}
+            onBlur={() => setMention(null)}
+            placeholder="Tell Mary what you're chewing on… (@ to reference)"
             disabled={streaming}
           />
           <button

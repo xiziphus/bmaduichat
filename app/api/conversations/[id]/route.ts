@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
 import { isPersistenceEnabled } from '@/lib/db';
-import { getConversation, setArchived } from '@/lib/repo/conversations';
+import { getConversation, setArchived, updateTitle } from '@/lib/repo/conversations';
 import { listMessages } from '@/lib/repo/messages';
 import { getLatestForConversation } from '@/lib/repo/artifacts';
 
@@ -44,10 +44,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
 }
 
-type PatchBody = { archived?: unknown };
+type PatchBody = { archived?: unknown; title?: unknown };
 
 /**
- * PATCH /api/conversations/[id] — archive/unarchive (never deletes).
+ * PATCH /api/conversations/[id] — rename (`title`) or archive/unarchive
+ * (`archived`). Never deletes. An empty/blank title clears it so the effective
+ * title falls back to an auto-title.
  */
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   if (!(await authed(req))) {
@@ -64,18 +66,26 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  if (typeof body.archived !== 'boolean') {
-    return NextResponse.json({ error: 'archived must be a boolean' }, { status: 400 });
+
+  const hasTitle = 'title' in body && (typeof body.title === 'string' || body.title === null);
+  const hasArchived = typeof body.archived === 'boolean';
+  if (!hasTitle && !hasArchived) {
+    return NextResponse.json(
+      { error: 'provide a string/null "title" or a boolean "archived"' },
+      { status: 400 },
+    );
   }
 
   try {
-    const conversation = await setArchived(id, body.archived);
+    const conversation = hasTitle
+      ? await updateTitle(id, body.title as string | null)
+      : await setArchived(id, body.archived as boolean);
     if (!conversation) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     return NextResponse.json({ enabled: true, conversation });
   } catch (err) {
-    console.error('[conversations] archive failed', err instanceof Error ? err.name : typeof err);
+    console.error('[conversations] patch failed', err instanceof Error ? err.name : typeof err);
     return NextResponse.json({ enabled: false, conversation: null });
   }
 }

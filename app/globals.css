@@ -111,7 +111,7 @@ input { font-family: inherit; }
 .notesfoot { font-size: 10.5px; color: #a98fc9; font-weight: 700; line-height: 1.45; border-top: 1px solid var(--line); padding-top: 9px; }
 
 /* input */
-#chat .inputw { margin-top: 14px; }
+#chat .inputw { margin-top: 14px; position: relative; }
 #chat .input { background: #fff; border-radius: 18px; padding: 6px 8px 6px 17px; font-size: 13.5px; color: var(--ink); font-weight: 600; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 10px rgba(90, 60, 130, .1); }
 #chat .input input { flex: 1; border: none; outline: none; font-size: 13.5px; font-weight: 600; color: var(--ink); background: transparent; padding: 8px 0; }
 #chat .input input::placeholder { color: #b9aec6; }
@@ -137,6 +137,26 @@ input { font-family: inherit; }
 .attach .attach-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attach .attach-x { width: 18px; height: 18px; border-radius: 50%; background: var(--vio-soft); color: var(--vio); display: grid; place-items: center; font-size: 14px; line-height: 1; flex: none; }
 .attach .attach-x:hover { background: var(--coral); color: #fff; }
+
+/* @-reference pills (staged, above the input) */
+.refrow .refpill { border-color: #d9cbf0; background: #faf7ff; color: var(--vio); }
+
+/* @-mention autocomplete popover */
+.mentionpop { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); background: #fff; border: 1.5px solid #e6dcf0; border-radius: 14px; box-shadow: 0 8px 24px rgba(90, 60, 130, .16); padding: 6px; max-height: 260px; overflow: auto; z-index: 20; }
+.mentionpop .mentionempty { padding: 10px 12px; font-size: 12px; font-weight: 700; color: #a98fc9; }
+.mentionpop .mentionitem { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 9px 11px; border-radius: 10px; font-size: 13px; font-weight: 700; color: var(--ink); background: transparent; }
+.mentionpop .mentionitem.on { background: var(--vio-soft); color: var(--vio); }
+.mentionpop .mentionitem .mentiontype { font-size: 14px; line-height: 1; flex: none; }
+.mentionpop .mentionitem .mentiontitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* sidebar inline rename */
+.convo .convo-ico { flex: none; }
+.convo .convo-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.convo .convo-rename { flex: none; opacity: 0; font-size: 12px; color: #a98fc9; width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; }
+.convo:hover .convo-rename { opacity: 1; }
+.convo .convo-rename:hover { background: #fff; color: var(--vio); }
+.convo.editing { background: #fff; box-shadow: 0 2px 8px rgba(90, 60, 130, .12); }
+.convo .convo-edit { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 13px; font-weight: 700; color: var(--ink); font-family: inherit; padding: 0; }
 
 /* persisted attachment chips on a message bubble */
 .msgattach { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
