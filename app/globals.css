@@ -17,6 +17,19 @@ input { font-family: inherit; }
   --mint: #e4f4e0; --mint-ink: #2e7040; --amber: #fff3d6; --amber-ink: #8a6414;
 }
 
+/* ================= SCROLLBARS =================
+   macOS overlay scrollbars are invisible until scrolling — style thin,
+   always-visible ones consistent with the pastel skin. */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ddd0e8; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--vio); }
+/* Firefox fallback on every scroll container */
+#side, #chat .msgs, #paper, #login {
+  scrollbar-width: thin;
+  scrollbar-color: #ddd0e8 transparent;
+}
+
 /* ================= APP GRID (resizable) ================= */
 #app { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 6px minmax(320px, 1fr) 6px 460px; }
 .gutter { background: transparent; position: relative; cursor: col-resize; z-index: 5; touch-action: none; }
