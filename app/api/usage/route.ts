@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
+import { authContext } from '@/lib/session';
 import { isPersistenceEnabled } from '@/lib/db';
 import { monthToDateSpend } from '@/lib/repo/usage';
 import { budgetCap, capStatus } from '@/lib/usage';
@@ -13,8 +13,7 @@ export const runtime = 'nodejs';
  * zero spend so the meter simply hides. Never errors.
  */
 export async function GET(req: NextRequest) {
-  const cookie = req.cookies.get(AUTH_COOKIE)?.value;
-  if (!(await verifyAuthCookie(cookie, process.env.AUTH_SECRET))) {
+  if (!(await authContext(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const cap = budgetCap();

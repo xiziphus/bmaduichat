@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
+import { authContext } from '@/lib/session';
 import { runWorkflow, type RunWorkflowInput } from '@/lib/runtime/engine';
 import type { Provider } from '@/lib/llm';
 import type { RunEvent } from '@/lib/runtime/types';
@@ -35,8 +35,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const cookie = req.cookies.get(AUTH_COOKIE)?.value;
-  if (!(await verifyAuthCookie(cookie, process.env.AUTH_SECRET))) {
+  if (!(await authContext(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
