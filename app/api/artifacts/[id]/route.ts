@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
 import { isPersistenceEnabled } from '@/lib/db';
@@ -6,6 +7,16 @@ import { renderMarkdownToHtml } from '@/lib/markdown';
 
 // react-dom/server + DB access → Node runtime.
 export const runtime = 'nodejs';
+
+/**
+ * With `?print=1` we auto-open the browser's print dialog (→ Save as PDF). The
+ * sandbox forbids scripts (CSP default-src 'none'), so we allow EXACTLY this one
+ * snippet via a CSP script-hash — the sanitized markdown still can't execute
+ * anything else. Waits for web fonts so the PDF renders with the right type.
+ */
+const PRINT_SCRIPT =
+  "window.addEventListener('load',function(){(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(function(){setTimeout(function(){window.print();},250);});});";
+const PRINT_SCRIPT_HASH = createHash('sha256').update(PRINT_SCRIPT).digest('base64');
 
 function escapeHtml(s: string): string {
   return s
@@ -31,6 +42,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!isPersistenceEnabled()) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
+
+  const wantsPrint = req.nextUrl.searchParams.get('print') === '1';
 
   const { id } = await ctx.params;
   let markdown: string | null = null;
@@ -90,6 +103,14 @@ body{background:#faf6f1;font-family:'Nunito',sans-serif;padding:40px 20px;displa
 .docbody pre{background:#f3ebfa;border-radius:10px;padding:12px 14px;overflow:auto;margin:12px 0}
 .docbody pre code{background:none;padding:0}
 .sig{margin-top:26px;padding-top:14px;border-top:1px solid #efe6f7;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#a89bb5;letter-spacing:.08em}
+@media print{
+  html,body{background:#fff}
+  body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #paper{box-shadow:none;border-radius:0;width:100%;padding:0 6px}
+  .docbody pre,.docbody blockquote,.docbody table,.docbody tr,.docbody img,.docbody li{break-inside:avoid}
+  .docbody h1,.docbody h2,.docbody h3,.docbody h4{break-after:avoid}
+}
+@page{margin:16mm}
 </style>
 </head>
 <body>
@@ -99,17 +120,18 @@ ${heading}
 <div class="rule"></div>
 ${bodyHtml}
 <div class="sig">MADE IN PLAYGROUND</div>
-</div>
+</div>${wantsPrint ? `\n<script>${PRINT_SCRIPT}</script>` : ''}
 </body>
 </html>`;
 
   return new Response(page, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      // Hard sandbox: no scripts, styles/fonts/images only. The rendered
-      // markdown is already sanitized; this is defense in depth.
+      // Hard sandbox: styles/fonts/images only. The rendered markdown is already
+      // sanitized; this is defense in depth. In print mode we additionally allow
+      // EXACTLY the auto-print snippet via its hash — nothing else can execute.
       'Content-Security-Policy':
-        "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https: data:; base-uri 'none'; form-action 'none'",
+        `default-src 'none'; script-src ${wantsPrint ? `'sha256-${PRINT_SCRIPT_HASH}'` : "'none'"}; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https: data:; base-uri 'none'; form-action 'none'`,
       'X-Content-Type-Options': 'nosniff',
       'Cache-Control': 'no-store',
     },

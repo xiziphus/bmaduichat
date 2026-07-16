@@ -26,8 +26,14 @@ export default function DocPane({ doc }: { doc: DocState | null }) {
   }
 
   function printDoc() {
-    // Print-CSS (@media print in globals.css) isolates ONLY the doc pane — no
-    // Puppeteer, no server render. The browser's print dialog → Save as PDF.
+    // Best path: a persisted artifact renders as a clean, fully-styled, isolated
+    // standalone page that auto-opens the print dialog (→ Save as PDF). Works for
+    // any document type. No Puppeteer, no server-side PDF.
+    if (doc?.artifactId) {
+      window.open(`/api/artifacts/${doc.artifactId}?print=1`, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    // Not yet persisted (e.g. no DB) → print the live doc pane via @media print.
     window.print();
   }
 
