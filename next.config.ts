@@ -25,6 +25,9 @@ const nextConfig: NextConfig = {
     // The techniques catalog reads brain-methods.csv at runtime; ship it into
     // this function too (the tracer can't see the fs.readFileSync path).
     '/api/techniques': ['./.claude/skills/bmad-brainstorming/assets/brain-methods.csv'],
+    // The Epic-D agent tree reads every skill's SKILL.md + customize.toml to
+    // build the manifest; ship the whole skills tree (+ custom overrides) in.
+    '/api/agents': ['./.claude/skills/**', './_bmad/custom/**'],
   },
 };
 

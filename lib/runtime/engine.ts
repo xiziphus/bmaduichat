@@ -15,7 +15,7 @@ import { loadSkill, adaptMechanics } from '@/lib/skills/loader';
 import { supportsFunctionCalling, type Provider, type MsgPart } from '@/lib/llm';
 import type { ModelClient, ToolExecutor, RunEvent, RunState, ToolMsg, RunStore } from './types';
 import { runLoop, structuredToolInstructions } from './loop';
-import { TOOL_SCHEMAS, createToolExecutor } from './tools';
+import { TOOL_SCHEMAS, toolSchemasFor, createToolExecutor } from './tools';
 import { makeProviderClient } from './model';
 import { dbRunStore, STALE_APOLOGY } from './state';
 import {
@@ -23,10 +23,18 @@ import {
   composeBrainstormingPrompt,
   type BrainstormPhase,
 } from './brainstorming';
+import { composeAgentCommandPrompt } from './agent-prompt';
 
 export type RunWorkflowInput = {
   conversationId: string;
   skillSlug: string;
+  /**
+   * The active agent (Epic D). When set, a non-brainstorming skill composes that
+   * agent's persona on top of the adapted SKILL.md (generic, zero per-agent
+   * code). Absent → the pre-D behavior is byte-identical: brainstorming uses its
+   * dedicated composer, any other skill uses the plain adapted SKILL.md.
+   */
+  agentSlug?: string;
   /** The user's message this turn (a fresh prompt, or the answer resuming a checkpoint). */
   input: string;
   /** Provider-native multimodal parts (images/PDFs) attached to THIS turn. */
@@ -64,21 +72,25 @@ export type RunWorkflowInput = {
 export function buildSystemPrompt(
   skillSlug: string,
   supportsTools: boolean,
-  opts?: { technique?: string; phase?: BrainstormPhase },
+  opts?: { technique?: string; phase?: BrainstormPhase; agentSlug?: string },
 ): string {
   let skillText = '';
   try {
-    // Brainstorming gets the dedicated composer (skill + phase refs + the shared
-    // APP_PROTOCOLS block); every other skill uses the generic adapted SKILL.md.
+    // Brainstorming keeps its dedicated composer (the C-4-proven path) whether or
+    // not an agent is named. With an agentSlug, any OTHER skill composes that
+    // agent's persona + the adapted SKILL.md (Epic D, generic). Absent → the
+    // pre-D plain adapted SKILL.md (byte-identical).
     skillText =
       skillSlug === BRAINSTORMING_SLUG
         ? composeBrainstormingPrompt({ technique: opts?.technique, phase: opts?.phase })
-        : adaptMechanics(loadSkill(skillSlug).skillMd);
+        : opts?.agentSlug
+          ? composeAgentCommandPrompt({ agentSlug: opts.agentSlug, skillSlug })
+          : adaptMechanics(loadSkill(skillSlug).skillMd);
   } catch {
     skillText = `You are running the "${skillSlug}" skill.`;
   }
   if (supportsTools) return skillText;
-  return skillText + '\n' + structuredToolInstructions(TOOL_SCHEMAS);
+  return skillText + '\n' + structuredToolInstructions(toolSchemasFor(skillSlug));
 }
 
 /**
@@ -121,6 +133,7 @@ export async function* runWorkflow(
     buildSystemPrompt(opts.skillSlug, supportsTools, {
       technique: opts.technique,
       phase: opts.phase,
+      agentSlug: opts.agentSlug,
     });
   const currentTurn: ToolMsg = {
     role: 'user',
@@ -152,7 +165,7 @@ export async function* runWorkflow(
       model,
       system,
       transcript,
-      tools: TOOL_SCHEMAS,
+      tools: toolSchemasFor(opts.skillSlug),
       supportsTools,
       executeTool,
       maxIterations: opts.deps?.maxIterations,

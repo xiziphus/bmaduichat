@@ -86,6 +86,30 @@ input { font-family: inherit; }
 .tech.dice { background: #fff; border-color: #e6dcf0; color: var(--ink); }
 .tech.dice:hover { border-color: var(--vio); color: var(--vio); }
 
+/* Epic D — agent→command tree (PLAYGROUND_TREE). Renders nothing when the flag is off. */
+.agenttree { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.agentrow, .cmdrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.agenttree .lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+.agentbtn { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1.5px solid #e6dcf0; color: var(--ink); font-size: 12px; font-weight: 800; padding: 6px 12px; border-radius: 99px; cursor: pointer; }
+.agentbtn:hover { border-color: var(--vio); color: var(--vio); }
+.agentbtn.on { background: var(--vio-soft); border-color: var(--vio); color: var(--vio); }
+.agentico { font-size: 14px; }
+.cmd { display: inline-flex; align-items: baseline; gap: 4px; max-width: 320px; background: var(--vio-soft); border: 1.5px solid transparent; color: var(--vio); font-size: 12px; font-weight: 800; padding: 6px 12px; border-radius: 99px; cursor: pointer; }
+.cmd:hover { border-color: var(--vio); }
+.cmd.on { border-color: var(--vio); box-shadow: 0 0 0 2px var(--vio-soft); }
+.cmd:disabled { opacity: .5; cursor: default; }
+.cmd .cmddesc { font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd .cmdlock { margin-left: 2px; }
+/* greyed-but-visible: the honest-breadth contract (FR-43) — visible, muted, still tappable */
+.cmd.greyed { background: #f3f0f7; color: var(--dim); border-color: transparent; }
+.cmd.greyed:hover { border-color: var(--dim); }
+.cmd.greyed .cmddesc { color: var(--dim); }
+
+/* Epic D — verified-only handoff chips (FR-38) */
+.handoffrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.handoffrow .lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+.chip.handoff { background: var(--mint); border-color: transparent; color: var(--mint-ink); }
+
 /* engine-only: "Mary is waiting on you" checkpoint affordance (PLAYGROUND_ENGINE) */
 .awaiting { margin-top: 10px; font-size: 12px; color: var(--vio); background: var(--vio-soft); border-radius: 10px; padding: 8px 12px; }
 

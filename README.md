@@ -19,6 +19,8 @@ no accounts, no persistence beyond the current browser tab in this first slice.
 | `DATABASE_URL` | no (optional) | — | Neon Postgres connection string. **Unset → the app runs exactly as before** (ephemeral, in-tab conversations). Set + migrated → conversations and history persist. |
 | `BUDGET_USD` | no | `10` | Monthly spend cap (USD). A safety net, not accounting — cost is **estimated** from a small per-model price table. Requires `DATABASE_URL`; with no DB there's no metering or cap. |
 | `PLAYGROUND_ENGINE` | no | *(off)* | **Experimental.** Unset/off → the brainstorming chat uses the hardcoded Mary prompt (the default, unchanged). Set to `on` → the same conversation runs through the **runtime engine** (`lib/runtime/*`), executing the real `bmad-brainstorming` SKILL.md instead. See [Runtime engine](#runtime-engine-experimental). |
+| `PLAYGROUND_TREE` | no | *(off)* | **Experimental.** Unset/off → the app is **byte-identical to today** (Mary is the single front door). Set to `on` → the browser shows the full **agent→command tree** (every BMad agent + command). See [Agent→command tree](#agentcommand-tree-experimental). |
+| `WEB_SEARCH_PROVIDER` | no | — | Free/keyless web-search tier for research commands (Epic D). Unset → research commands degrade honestly. **Never a paid API.** |
 
 ## Budget cap (optional, requires a database)
 
@@ -50,6 +52,35 @@ persona/framing/stance come from the loaded BMad files, not hand-written copy.
 
 The flag ships **off**; flip it only after an in-browser parity pass. With a database
 configured, the engine persists resumable run state to `workflow_runs` (cross-session).
+
+## Agent→command tree (experimental)
+
+By default Playground has one front door: Mary and her brainstorming. Setting
+`PLAYGROUND_TREE=on` reveals the full **agent→command tree** — every BMad agent
+(Mary, John, Winston, Sally, the CIS crew…) and every command in each agent's
+menu, rendered **entirely from the skill manifest** (`getManifest()`) plus a
+checked-in **capability registry** (`lib/agents/capabilities.ts`). There is no
+per-agent TypeScript: add or rename an agent in `.claude/skills/**` and the tree
+changes with no code edit.
+
+- **Parity is data, not vibes.** Each command carries a `verified` / `unverified`
+  status. Only `verified` commands launch on the engine; the rest render
+  **greyed-but-visible** (you see everything each agent *can* do) and, when
+  tapped, show an honest "not wired up here yet" bubble and drop a builder note.
+  The seed ships **only** `bmad-agent-analyst`/`BP` (brainstorming) verified —
+  the C-4-proven path. Flip a command live by adding it to the seed **with a
+  documented in-browser parity pass**.
+- **Launch reuses the engine.** A `skill`-backed command runs `runWorkflow(...)`
+  exactly as brainstorming does (same adapter + persona composition + app
+  protocols); a `prompt`-backed command runs its prompt text as the launch turn.
+- **Handoff.** When a workflow finishes with a `<document>`, verified-only
+  handoff chips can carry that artifact into another agent's command with it
+  pre-`@refer`'d (FR-38).
+- **Research** commands use a free/keyless web-search tier (`WEB_SEARCH_PROVIDER`)
+  and degrade honestly when unconfigured — never a paid API.
+
+The flag ships **off**; with it off the app is byte-identical to today. Flip it
+only after an in-browser pass (same discipline as `PLAYGROUND_ENGINE`).
 
 ## Builder notes outbox
 

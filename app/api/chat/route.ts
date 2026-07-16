@@ -13,6 +13,7 @@ import {
 } from '@/lib/llm';
 import { runWorkflow } from '@/lib/runtime/engine';
 import { BRAINSTORMING_SLUG, inferPhase } from '@/lib/runtime/brainstorming';
+import { planLaunch } from '@/lib/runtime/launch';
 import type { ToolMsg } from '@/lib/runtime/types';
 import { isPersistenceEnabled, transaction } from '@/lib/db';
 import { buildAppendMessageQuery } from '@/lib/repo/messages';
@@ -59,6 +60,9 @@ type ChatBody = {
   technique?: unknown;
   conversationId?: unknown;
   references?: unknown;
+  /** Epic D launch descriptor: an agent + command from the tree. */
+  agentSlug?: unknown;
+  code?: unknown;
 };
 
 /**
@@ -115,6 +119,10 @@ type EngineChatParams = {
   persist: boolean;
   userTurn?: string;
   userAttachments?: AttachmentMeta[];
+  /** The skill to run (Epic D command launch). Defaults to brainstorming. */
+  skillSlug?: string;
+  /** The active agent whose persona composes the run (Epic D). */
+  agentSlug?: string;
 };
 
 /**
@@ -133,6 +141,7 @@ type EngineChatParams = {
  */
 function engineChatResponse(params: EngineChatParams): Response {
   const { provider, model, free, messages, technique, conversationId, persist } = params;
+  const skillSlug = params.skillSlug ?? BRAINSTORMING_SLUG;
   const meter = isPersistenceEnabled();
   // Only drive the DB-backed run store when we have a real conversation to bind
   // it to; otherwise the engine runs a single, unpersisted session.
@@ -171,7 +180,8 @@ function engineChatResponse(params: EngineChatParams): Response {
         try {
           for await (const ev of runWorkflow({
             conversationId: engineConvId,
-            skillSlug: BRAINSTORMING_SLUG,
+            skillSlug,
+            agentSlug: params.agentSlug,
             input,
             inputParts,
             history,
@@ -381,6 +391,49 @@ export async function POST(req: NextRequest) {
       // Fail OPEN — a metering hiccup must never block chat.
       console.error('[chat] cap check failed', err instanceof Error ? err.name : typeof err);
     }
+  }
+
+  // Epic D — flag-gated agent→command tree launch. Default (PLAYGROUND_TREE
+  // unset/off) IGNORES any launch descriptor entirely, so the request is
+  // byte-identical to today. Only when PLAYGROUND_TREE=on and a valid
+  // {agentSlug, code} descriptor is present do we route the launch:
+  //   verified skill/prompt → the engine (reusing engineChatResponse, the C-4
+  //   path); unverified → an honest degrade bubble + a builder note (FR-43).
+  const agentSlug = typeof body.agentSlug === 'string' ? body.agentSlug : undefined;
+  const code = typeof body.code === 'string' ? body.code : undefined;
+  if (process.env.PLAYGROUND_TREE === 'on' && agentSlug && code) {
+    const plan = planLaunch(agentSlug, code);
+    if (plan && plan.kind === 'degrade') {
+      // Honest, VISIBLE bubble (contains "noted for the builder" → B-5 capture).
+      // Persist the builder note server-side when a DB is configured; with no DB
+      // the client extracts it from the streamed bubble into localStorage (B-5).
+      if (isPersistenceEnabled()) {
+        try {
+          await insertBuilderNote({ conversationId: conversationId ?? null, excerpt: plan.message });
+        } catch (err) {
+          console.error('[chat] degrade note write failed', err instanceof Error ? err.name : typeof err);
+        }
+      }
+      return honestBubbleResponse(plan.message);
+    }
+    if (plan && (plan.kind === 'skill' || plan.kind === 'prompt')) {
+      // skill → run that skill; prompt → run persona-only (skillSlug = agentSlug)
+      // and the client already posted the prompt text as the launch turn.
+      return engineChatResponse({
+        provider: provider as Provider,
+        model,
+        free,
+        messages: modelMessages,
+        technique,
+        conversationId,
+        persist,
+        userTurn,
+        userAttachments,
+        skillSlug: plan.kind === 'skill' ? plan.skillSlug : plan.agentSlug,
+        agentSlug: plan.agentSlug,
+      });
+    }
+    // plan === null (unknown agent/code) → fall through to the normal path.
   }
 
   // Flag-gated engine path. Default (unset/off) falls straight through to the

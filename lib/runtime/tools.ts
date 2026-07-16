@@ -18,6 +18,7 @@ import { getTechniques } from '@/lib/techniques-catalog';
 import { appendRunEvent as dbAppendRunEvent } from '@/lib/repo/run-events';
 import { createVersion } from '@/lib/repo/artifacts';
 import { listArtifacts } from '@/lib/repo/artifacts';
+import { isResearchSkill, webSearchProvider } from '@/lib/agents/capabilities';
 
 /* ---------------- schemas ---------------- */
 
@@ -89,6 +90,29 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
   },
 ];
 
+/**
+ * The free-tier `web_search` tool (FR-41), offered ONLY to research-family
+ * skills. Kept OUT of the fixed `TOOL_SCHEMAS` above so it never changes the
+ * brainstorming / non-research runs; `toolSchemasFor(skill)` appends it for a
+ * research skill. Degrades honestly (never a paid API) when no free provider is
+ * configured (env `WEB_SEARCH_PROVIDER`).
+ */
+export const WEB_SEARCH_SCHEMA: ToolSchema = {
+  name: 'web_search',
+  description:
+    'Search the web via the builder-configured FREE search tier for facts/sources this research needs. Returns short result snippets. If no provider is configured it returns an honest note (there is no paid fallback).',
+  parameters: OBJ({ query: STR('The search query.') }, ['query']),
+};
+
+/**
+ * The tool set for a run: the fixed BMad-op set, plus `web_search` for
+ * research-family skills. Data-driven (no per-agent code) — a research skill is
+ * recognized by the capability registry.
+ */
+export function toolSchemasFor(skillSlug: string): ToolSchema[] {
+  return isResearchSkill(skillSlug) ? [...TOOL_SCHEMAS, WEB_SEARCH_SCHEMA] : TOOL_SCHEMAS;
+}
+
 /* ---------------- executor context ---------------- */
 
 /**
@@ -111,6 +135,12 @@ export type ToolContext = {
   listOutputs?: () => Promise<{ title: string | null; version: number }[]>;
   /** Technique catalog rows (defaults to the catalog). */
   techniques?: () => { id: string; name: string; category: string; gist: string }[];
+  /**
+   * Run a free-tier web search (defaults to the env-configured provider). Tests
+   * inject a deterministic impl; with no `WEB_SEARCH_PROVIDER` the default
+   * degrades honestly and never calls a paid API.
+   */
+  webSearch?: (query: string) => Promise<string>;
 };
 
 const DB_OFF_NOTE = '(not persisted — no database configured)';
@@ -149,6 +179,24 @@ async function defaultListOutputs(
 
 function str(v: unknown, fallback = ''): string {
   return typeof v === 'string' ? v : fallback;
+}
+
+/** The honest degrade returned when no free web-search provider is wired up. */
+export const WEB_SEARCH_UNCONFIGURED =
+  "Web search isn't wired up here yet — no free provider is configured, and I won't reach a paid one. Noted for the builder. Paste any facts or sources you have and I'll fold them in.";
+
+/**
+ * Default free-tier web search. Honors `WEB_SEARCH_PROVIDER` (a free/keyless
+ * tier only); with none configured — or a provider we don't implement yet — it
+ * returns the honest note above rather than calling any paid API.
+ */
+async function defaultWebSearch(_query: string): Promise<string> {
+  void _query;
+  const provider = webSearchProvider();
+  if (!provider) return WEB_SEARCH_UNCONFIGURED;
+  // A free provider is named but no keyless client is wired in this build — stay
+  // honest (never a paid fallback) and capture the demand for the builder.
+  return `Web search via "${provider}" isn't wired up in this build yet. Noted for the builder. Paste any facts or sources you have and I'll fold them in.`;
 }
 
 /**
@@ -241,6 +289,17 @@ export function createToolExecutor(ctx: ToolContext): ToolExecutor {
         }
         // list
         return result(all.map((t) => `${t.name} [${t.category}]`).join('\n'));
+      }
+
+      case 'web_search': {
+        const q = str(args.query);
+        if (!q) return result('error: `query` is required.');
+        const search = ctx.webSearch ?? defaultWebSearch;
+        try {
+          return result(await search(q));
+        } catch {
+          return result(WEB_SEARCH_UNCONFIGURED);
+        }
       }
 
       default:

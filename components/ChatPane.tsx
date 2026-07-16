@@ -34,8 +34,13 @@ import {
   type BuilderNote,
 } from '@/lib/builder-notes';
 import ModelToggle from './ModelToggle';
+import AgentTree, { type TreeAgent, type TreeCommand } from './AgentTree';
+import { buildHandoffChips, type HandoffChip } from '@/lib/runtime/handoff';
 import type { DocState } from './DocPane';
 import { activeMentionQuery, stripRange, type Reference } from '@/lib/mentions';
+
+/** Epic D — the active tree command driving this conversation (if any). */
+type ActiveLaunch = { agentSlug: string; code: string };
 
 /** One autocomplete row from GET /api/references. */
 type MentionItem = { type: 'conversation' | 'artifact'; id: string; title: string };
@@ -148,6 +153,14 @@ export default function ChatPane({
   const [catalog, setCatalog] = useState<Technique[]>([]);
   const [pair, setPair] = useState<[Technique, Technique] | null>(null);
   const [activeTechnique, setActiveTechnique] = useState<Technique | undefined>(undefined);
+  // Epic D — the tree command currently driving this conversation (verified
+  // launches only). Threaded onto every send so continuation turns stay on the
+  // same skill. Null on the default (flag-off) Mary path.
+  const [activeLaunch, setActiveLaunch] = useState<ActiveLaunch | null>(null);
+  // The loaded agent tree (from AgentTree) — used to compute verified-only
+  // handoff chips when a wrap-up artifact lands.
+  const [treeAgents, setTreeAgents] = useState<TreeAgent[]>([]);
+  const [handoffChips, setHandoffChips] = useState<HandoffChip[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   // Set only by the runtime-engine path (PLAYGROUND_ENGINE on) when a run HALTs
@@ -382,9 +395,15 @@ export default function ChatPane({
     }
   }
 
-  async function runChat(history: UiMessage[], technique?: string, refs: Reference[] = []) {
+  async function runChat(
+    history: UiMessage[],
+    technique?: string,
+    refs: Reference[] = [],
+    launch?: ActiveLaunch | null,
+  ) {
     setStreaming(true);
     setAwaiting(false);
+    setHandoffChips([]);
     const placeholderId = nextId();
     setMessages([...history, { id: placeholderId, role: 'assistant', content: '' }]);
 
@@ -417,6 +436,9 @@ export default function ChatPane({
           conversationId,
           // Send only {type,id}; the server resolves the content.
           references: refs.length > 0 ? refs.map((r) => ({ type: r.type, id: r.id })) : undefined,
+          // Epic D launch descriptor (ignored server-side unless PLAYGROUND_TREE on).
+          agentSlug: launch?.agentSlug,
+          code: launch?.code,
         }),
       });
 
@@ -432,6 +454,7 @@ export default function ChatPane({
       const decoder = new TextDecoder();
       let buffer = '';
       let raw = '';
+      let artifactId: string | undefined;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -466,8 +489,11 @@ export default function ChatPane({
             }
             // Trailing frame from the server once the artifact row is written:
             // re-report the finished doc with its persisted id.
-            if (parsed.artifact?.id && onDocument && lastDocRef.current) {
-              onDocument({ ...lastDocRef.current, artifactId: parsed.artifact.id });
+            if (parsed.artifact?.id) {
+              artifactId = parsed.artifact.id;
+              if (onDocument && lastDocRef.current) {
+                onDocument({ ...lastDocRef.current, artifactId: parsed.artifact.id });
+              }
             }
           } catch {
             // ignore unparseable frames
@@ -495,6 +521,18 @@ export default function ChatPane({
       }
       finalizePlaceholder(text, chips);
       captureBuilderNotes(text);
+      // Epic D — a wrap-up artifact just landed: offer verified-only handoff
+      // chips that carry it into another agent's command (@refer'd). With the
+      // current seed there is no other verified target, so this stays empty.
+      if (document && artifactId && treeAgents.length > 0) {
+        setHandoffChips(
+          buildHandoffChips({
+            tree: treeAgents,
+            artifact: { id: artifactId, title: document.title ?? undefined },
+            self: launch ?? undefined,
+          }),
+        );
+      }
       // Refresh the budget meter (a billable turn may have just been metered).
       loadBudget();
       // A full exchange just persisted server-side — let the parent refresh the
@@ -510,6 +548,7 @@ export default function ChatPane({
   function launchTechnique(t: Technique) {
     if (streaming) return;
     setActiveTechnique(t);
+    setActiveLaunch(null);
     // History must always end on a user turn (Gemini rejects assistant-final
     // histories; OpenAI-shape treats them as prefill) — so launching a
     // technique posts a visible user message first.
@@ -637,7 +676,49 @@ export default function ChatPane({
     setAttachments([]);
     setReferences([]);
     setMention(null);
-    void runChat([...messages, userMsg], undefined, refs);
+    void runChat([...messages, userMsg], undefined, refs, activeLaunch);
+  }
+
+  // Epic D — launch a command from the agent tree. A verified command becomes the
+  // active launch (threaded onto continuation turns); a greyed command still
+  // posts (server returns an honest degrade + builder note) but is never made
+  // active. Zero per-command logic — the kickoff + descriptor are generic.
+  function launchCommand(agentSlug: string, code: string, command: TreeCommand) {
+    if (streaming) return;
+    const verified = command.parity === 'verified';
+    const kickoff = verified
+      ? command.prompt ?? `Let's start: ${command.description ?? command.code}.`
+      : `Run ${command.code}${command.description ? ` — ${command.description}` : ''}.`;
+    const launch: ActiveLaunch = { agentSlug, code };
+    setActiveTechnique(undefined);
+    setActiveLaunch(verified ? launch : null);
+    void runChat(
+      [...messages, { id: nextId(), role: 'user', content: kickoff }],
+      undefined,
+      [],
+      launch,
+    );
+  }
+
+  // Epic D — carry a finished artifact into a verified target command, with the
+  // artifact pre-referenced via @refer (FR-38).
+  function launchHandoff(chip: HandoffChip) {
+    if (streaming) return;
+    const launch: ActiveLaunch = { agentSlug: chip.agentSlug, code: chip.code };
+    const ref: Reference = {
+      type: chip.reference.type,
+      id: chip.reference.id,
+      title: chip.reference.title ?? '',
+    };
+    setActiveTechnique(undefined);
+    setActiveLaunch(launch);
+    setHandoffChips([]);
+    void runChat(
+      [...messages, { id: nextId(), role: 'user', content: `Let's take this to ${chip.code}.` }],
+      undefined,
+      [ref],
+      launch,
+    );
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -918,6 +999,30 @@ export default function ChatPane({
           >
             🎲 show me others
           </button>
+        </div>
+      )}
+
+      <AgentTree
+        disabled={streaming}
+        activeCode={activeLaunch?.code}
+        onLaunch={launchCommand}
+        onTreeLoaded={setTreeAgents}
+      />
+
+      {handoffChips.length > 0 && (
+        <div className="handoffrow">
+          <span className="lbl">Hand off →</span>
+          {handoffChips.map((h) => (
+            <button
+              key={`${h.agentSlug}:${h.code}`}
+              type="button"
+              className="chip handoff"
+              disabled={streaming}
+              onClick={() => launchHandoff(h)}
+            >
+              {h.label}
+            </button>
+          ))}
         </div>
       )}
 
