@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
+import { authContext } from '@/lib/session';
 import { isPersistenceEnabled } from '@/lib/db';
 import { getById } from '@/lib/repo/artifacts';
 import { renderMarkdownToHtml } from '@/lib/markdown';
@@ -35,8 +35,8 @@ function escapeHtml(s: string): string {
  * through, nothing could execute. 404 when missing; 401 when unauthed.
  */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const cookie = req.cookies.get(AUTH_COOKIE)?.value;
-  if (!(await verifyAuthCookie(cookie, process.env.AUTH_SECRET))) {
+  const auth = await authContext(req);
+  if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isPersistenceEnabled()) {
@@ -49,7 +49,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   let markdown: string | null = null;
   let title: string | null = null;
   try {
-    const artifact = await getById(id);
+    // Owner-scoped: another user's artifact returns null → 404 (isolation).
+    const artifact = await getById(id, undefined, auth.userId);
     if (!artifact || !artifact.markdown) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }

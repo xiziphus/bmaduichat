@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
 import { isPersistenceEnabled } from '@/lib/db';
+import { authContext } from '@/lib/session';
 import {
   listBuilderNotes,
   markBuilderNotesSent,
@@ -9,11 +9,6 @@ import {
 
 // DB access → Node runtime.
 export const runtime = 'nodejs';
-
-async function authed(req: NextRequest): Promise<boolean> {
-  const cookie = req.cookies.get(AUTH_COOKIE)?.value;
-  return verifyAuthCookie(cookie, process.env.AUTH_SECRET);
-}
 
 function parseStatus(raw: string | null): BuilderNoteStatus | undefined {
   return raw === 'collected' || raw === 'sent' ? raw : undefined;
@@ -25,7 +20,8 @@ function parseStatus(raw: string | null): BuilderNoteStatus | undefined {
  * client falls back to its localStorage notes. Never errors.
  */
 export async function GET(req: NextRequest) {
-  if (!(await authed(req))) {
+  const ctx = await authContext(req);
+  if (!ctx) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isPersistenceEnabled()) {
@@ -33,7 +29,7 @@ export async function GET(req: NextRequest) {
   }
   const status = parseStatus(req.nextUrl.searchParams.get('status'));
   try {
-    const notes = await listBuilderNotes(status);
+    const notes = await listBuilderNotes(status, undefined, ctx.userId);
     return NextResponse.json({ enabled: true, notes });
   } catch (err) {
     console.error('[builder-notes] list failed', err instanceof Error ? err.name : typeof err);
@@ -46,7 +42,8 @@ export async function GET(req: NextRequest) {
  * notes to status 'sent' (builder-visible). No-op / graceful when the DB is off.
  */
 export async function POST(req: NextRequest) {
-  if (!(await authed(req))) {
+  const ctx = await authContext(req);
+  if (!ctx) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isPersistenceEnabled()) {
@@ -63,7 +60,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'ids must be a non-empty array of note ids' }, { status: 400 });
   }
   try {
-    await markBuilderNotesSent(ids);
+    await markBuilderNotesSent(ids, undefined, ctx.userId);
     return NextResponse.json({ enabled: true, ok: true });
   } catch (err) {
     console.error('[builder-notes] mark sent failed', err instanceof Error ? err.name : typeof err);

@@ -71,6 +71,7 @@ function unavailableBlock(type: ReferenceType): string {
 export async function resolveReferences(
   refs: Reference[],
   exec: QueryFn = query,
+  owner: string | null = null,
 ): Promise<{ context: string; resolved: ResolvedReference[] }> {
   const blocks: string[] = [];
   const resolved: ResolvedReference[] = [];
@@ -85,7 +86,8 @@ export async function resolveReferences(
     const allowance = Math.min(PER_REFERENCE_BUDGET, remaining);
 
     if (ref.type === 'conversation') {
-      const convo = await getConversation(ref.id, exec);
+      // Owner-scoped: a user can only @refer their OWN conversations (multi mode).
+      const convo = await getConversation(ref.id, exec, owner);
       if (!convo) {
         resolved.push({ type: ref.type, id: ref.id, title: ref.title, available: false });
         blocks.push(unavailableBlock('conversation'));
@@ -102,7 +104,8 @@ export async function resolveReferences(
       remaining -= block.length;
       resolved.push({ type: ref.type, id: ref.id, title, available: true });
     } else {
-      const artifact = await getById(ref.id, exec);
+      // Owner-scoped: a user can only @refer artifacts from their own conversations.
+      const artifact = await getById(ref.id, exec, owner);
       if (!artifact || !artifact.markdown) {
         resolved.push({ type: ref.type, id: ref.id, title: ref.title, available: false });
         blocks.push(unavailableBlock('artifact'));

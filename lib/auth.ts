@@ -6,9 +6,25 @@
  */
 
 export const AUTH_COOKIE = 'playground_auth';
+/** Multi-user signed-session cookie (Epic F). Separate name so shared mode is
+ *  byte-identical: with AUTH_MODE unset/shared this cookie is never set/read. */
+export const SESSION_COOKIE = 'playground_session';
 const AUTH_PAYLOAD = 'playground-v1';
 
 const encoder = new TextEncoder();
+
+export type AuthMode = 'shared' | 'multi';
+export type Role = 'admin' | 'user';
+export type Session = { uid: string; role: Role };
+
+/**
+ * The auth mode. Default (env unset or anything other than exactly "multi") is
+ * `shared` — the single-password, no-accounts behavior identical to today. Only
+ * AUTH_MODE=multi turns on the multi-user account system.
+ */
+export function authMode(): AuthMode {
+  return process.env.AUTH_MODE === 'multi' ? 'multi' : 'shared';
+}
 
 function toHex(buf: ArrayBuffer): string {
   return Array.from(new Uint8Array(buf))
@@ -54,3 +70,44 @@ export async function verifyAuthCookie(
   const expected = await authToken(secret);
   return safeEqual(value, expected);
 }
+
+// ---------------------------------------------------------------------------
+// Multi-user signed session (Epic F). Edge-safe: uses the SAME Web Crypto HMAC
+// primitive as the shared cookie above, so middleware verifies on the edge with
+// no database hit. Cookie value = `${uid}.${role}.${hmacHex}` where the HMAC is
+// over `${uid}.${role}`. uid is a uuid and role is admin|user — neither contains
+// a ".", so splitting on "." is unambiguous.
+// ---------------------------------------------------------------------------
+
+function isRole(v: string): v is Role {
+  return v === 'admin' || v === 'user';
+}
+
+/** Issue a signed session cookie value for `{uid, role}`. */
+export async function issueSession(session: Session, secret: string): Promise<string> {
+  const payload = `${session.uid}.${session.role}`;
+  const sig = await hmacSha256Hex(secret, payload);
+  return `${payload}.${sig}`;
+}
+
+/**
+ * Verify a signed session cookie. Returns `{uid, role}` when the signature is
+ * valid (constant-time) and the role is recognized, else null. Any tampering
+ * with uid/role/signature fails the HMAC check.
+ */
+export async function verifySession(
+  value: string | undefined,
+  secret: string | undefined,
+): Promise<Session | null> {
+  if (!value || !secret) return null;
+  const parts = value.split('.');
+  if (parts.length !== 3) return null;
+  const [uid, role, sig] = parts;
+  if (!uid || !isRole(role)) return null;
+  const expected = await hmacSha256Hex(secret, `${uid}.${role}`);
+  if (!(await safeEqual(sig, expected))) return null;
+  return { uid, role };
+}
+
+// Password hashing (scrypt) lives in lib/password.ts — a SEPARATE module — so
+// this edge-imported module never pulls in `node:crypto`. See lib/password.ts.

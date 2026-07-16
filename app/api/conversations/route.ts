@@ -1,30 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
 import { isPersistenceEnabled } from '@/lib/db';
+import { authContext } from '@/lib/session';
 import { createConversation, listConversations } from '@/lib/repo/conversations';
 
 // DB access → Node runtime.
 export const runtime = 'nodejs';
 
-async function authed(req: NextRequest): Promise<boolean> {
-  const cookie = req.cookies.get(AUTH_COOKIE)?.value;
-  return verifyAuthCookie(cookie, process.env.AUTH_SECRET);
-}
-
 /**
  * GET /api/conversations — list non-archived conversations, newest first.
- * When persistence is disabled, returns `{ enabled: false, conversations: [] }`
- * so the client falls back to today's ephemeral behavior with no error.
+ * In multi mode the list is scoped to the logged-in user; in shared mode it is
+ * unscoped (byte-identical to today). When persistence is disabled, returns
+ * `{ enabled: false, conversations: [] }` so the client falls back with no error.
  */
 export async function GET(req: NextRequest) {
-  if (!(await authed(req))) {
+  const ctx = await authContext(req);
+  if (!ctx) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isPersistenceEnabled()) {
     return NextResponse.json({ enabled: false, conversations: [] });
   }
   try {
-    const conversations = await listConversations();
+    const conversations = await listConversations(undefined, ctx.userId);
     return NextResponse.json({ enabled: true, conversations });
   } catch (err) {
     console.error('[conversations] list failed', err instanceof Error ? err.name : typeof err);
@@ -38,14 +35,15 @@ export async function GET(req: NextRequest) {
  * Never deletes or archives the previous one. No-op envelope when disabled.
  */
 export async function POST(req: NextRequest) {
-  if (!(await authed(req))) {
+  const ctx = await authContext(req);
+  if (!ctx) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isPersistenceEnabled()) {
     return NextResponse.json({ enabled: false, conversation: null });
   }
   try {
-    const conversation = await createConversation();
+    const conversation = await createConversation({ owner: ctx.userId });
     return NextResponse.json({ enabled: true, conversation }, { status: 201 });
   } catch (err) {
     console.error('[conversations] create failed', err instanceof Error ? err.name : typeof err);

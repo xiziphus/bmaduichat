@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
 import { isPersistenceEnabled } from '@/lib/db';
+import { authContext } from '@/lib/session';
 import { getConversation, setArchived, updateTitle } from '@/lib/repo/conversations';
 import { listMessages } from '@/lib/repo/messages';
 import { getLatestForConversation } from '@/lib/repo/artifacts';
@@ -8,25 +8,22 @@ import { getLatestForConversation } from '@/lib/repo/artifacts';
 // DB access → Node runtime.
 export const runtime = 'nodejs';
 
-async function authed(req: NextRequest): Promise<boolean> {
-  const cookie = req.cookies.get(AUTH_COOKIE)?.value;
-  return verifyAuthCookie(cookie, process.env.AUTH_SECRET);
-}
-
 /**
  * GET /api/conversations/[id] — rehydrate a full message thread, in order.
- * 404 when the conversation is missing so the client can refresh the sidebar.
+ * 404 when the conversation is missing OR owned by another user (multi mode) —
+ * the ownership check here gates the message/artifact reads below.
  */
-export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  if (!(await authed(req))) {
+export async function GET(req: NextRequest, routeCtx: { params: Promise<{ id: string }> }) {
+  const auth = await authContext(req);
+  if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isPersistenceEnabled()) {
     return NextResponse.json({ enabled: false, messages: [] });
   }
-  const { id } = await ctx.params;
+  const { id } = await routeCtx.params;
   try {
-    const conversation = await getConversation(id);
+    const conversation = await getConversation(id, undefined, auth.userId);
     if (!conversation) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -51,14 +48,15 @@ type PatchBody = { archived?: unknown; title?: unknown };
  * (`archived`). Never deletes. An empty/blank title clears it so the effective
  * title falls back to an auto-title.
  */
-export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  if (!(await authed(req))) {
+export async function PATCH(req: NextRequest, routeCtx: { params: Promise<{ id: string }> }) {
+  const auth = await authContext(req);
+  if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isPersistenceEnabled()) {
     return NextResponse.json({ enabled: false, conversation: null });
   }
-  const { id } = await ctx.params;
+  const { id } = await routeCtx.params;
 
   let body: PatchBody;
   try {
@@ -78,8 +76,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
   try {
     const conversation = hasTitle
-      ? await updateTitle(id, body.title as string | null)
-      : await setArchived(id, body.archived as boolean);
+      ? await updateTitle(id, body.title as string | null, undefined, auth.userId)
+      : await setArchived(id, body.archived as boolean, undefined, auth.userId);
     if (!conversation) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }

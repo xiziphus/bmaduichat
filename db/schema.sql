@@ -18,6 +18,29 @@ CREATE TABLE IF NOT EXISTS conversations (
 CREATE INDEX IF NOT EXISTS conversations_active_idx
   ON conversations (archived, created DESC);
 
+-- Multi-user auth (Epic F). Inert in shared mode (AUTH_MODE unset/shared): the
+-- app never reads these, so adding them changes nothing about today's behavior.
+-- Passwords are scrypt-hashed and stored self-describing (`scrypt$salt$hash`) by
+-- the app — never in the clear. username is unique + lowercased by the app.
+CREATE TABLE IF NOT EXISTS users (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  username      text NOT NULL UNIQUE,
+  password_hash text NOT NULL,
+  role          text NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+  created       timestamptz NOT NULL DEFAULT now()
+);
+
+-- Per-user ownership of conversations. Nullable + additive so shared-mode rows
+-- (and pre-migration rows) are untouched; multi-mode migration backfills existing
+-- rows to the admin (see scripts/migrate.mjs). Every child record (messages,
+-- artifacts, workflow_runs, run_events, builder_notes) is scoped VIA its owning
+-- conversation, so this single column carries per-user isolation.
+ALTER TABLE conversations
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES users (id);
+
+CREATE INDEX IF NOT EXISTS conversations_user_idx
+  ON conversations (user_id, archived, created DESC);
+
 CREATE TABLE IF NOT EXISTS messages (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id uuid NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,

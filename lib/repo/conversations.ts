@@ -4,8 +4,18 @@
  * Every function takes an optional `exec` executor (defaulting to the real Neon
  * query helper) so unit tests can assert SQL/param shape against a mock without
  * a live database. Callers must gate on isPersistenceEnabled() before invoking.
+ *
+ * **Per-user isolation (Epic F).** Each read/write takes an `owner` = the logged
+ * in user id, or `null` in shared mode. When `null`, the SQL is byte-identical to
+ * pre-Epic-F (no user filter) — so shared mode is unchanged. When set, every
+ * query is scoped to that owner, and creates stamp `user_id`. Because all child
+ * records (messages, artifacts, runs, notes) are reached through a conversation,
+ * verifying conversation ownership here is the single isolation choke point.
  */
 import { query, type QueryFn } from '@/lib/db';
+
+/** The owning user id to scope to, or null in shared mode (unscoped). */
+export type Owner = string | null;
 
 export type ConversationSummary = {
   id: string;
@@ -41,7 +51,21 @@ const EFFECTIVE_TITLE = `COALESCE(
  * Non-archived conversations, newest first. `title` falls back to the first user
  * message snippet, then to a constant, so the sidebar is useful without renames.
  */
-export async function listConversations(exec: QueryFn = query): Promise<ConversationSummary[]> {
+export async function listConversations(
+  exec: QueryFn = query,
+  owner: Owner = null,
+): Promise<ConversationSummary[]> {
+  if (owner === null) {
+    return exec<ConversationSummary>(
+      `SELECT c.id,
+              ${EFFECTIVE_TITLE} AS title,
+              c.created,
+              c.archived
+         FROM conversations c
+        WHERE c.archived = false
+        ORDER BY c.created DESC`,
+    );
+  }
   return exec<ConversationSummary>(
     `SELECT c.id,
             ${EFFECTIVE_TITLE} AS title,
@@ -49,7 +73,9 @@ export async function listConversations(exec: QueryFn = query): Promise<Conversa
             c.archived
        FROM conversations c
       WHERE c.archived = false
+        AND c.user_id = $1
       ORDER BY c.created DESC`,
+    [owner],
   );
 }
 
@@ -62,7 +88,22 @@ export async function searchConversations(
   q: string,
   limit = 8,
   exec: QueryFn = query,
+  owner: Owner = null,
 ): Promise<ConversationSummary[]> {
+  if (owner === null) {
+    return exec<ConversationSummary>(
+      `SELECT c.id,
+              ${EFFECTIVE_TITLE} AS title,
+              c.created,
+              c.archived
+         FROM conversations c
+        WHERE c.archived = false
+          AND ${EFFECTIVE_TITLE} ILIKE $1
+        ORDER BY c.created DESC
+        LIMIT $2`,
+      [`%${q}%`, limit],
+    );
+  }
   return exec<ConversationSummary>(
     `SELECT c.id,
             ${EFFECTIVE_TITLE} AS title,
@@ -70,37 +111,55 @@ export async function searchConversations(
             c.archived
        FROM conversations c
       WHERE c.archived = false
+        AND c.user_id = $3
         AND ${EFFECTIVE_TITLE} ILIKE $1
       ORDER BY c.created DESC
       LIMIT $2`,
-    [`%${q}%`, limit],
+    [`%${q}%`, limit, owner],
   );
 }
 
-/** Create a new (non-archived) conversation and return the full row. */
+/**
+ * Create a new (non-archived) conversation and return the full row. In multi
+ * mode `owner` stamps `user_id`; in shared mode it stays null (unchanged).
+ */
 export async function createConversation(
-  input: { title?: string | null; agentSlug?: string } = {},
+  input: { title?: string | null; agentSlug?: string; owner?: Owner } = {},
   exec: QueryFn = query,
 ): Promise<Conversation> {
   const rows = await exec<Conversation>(
-    `INSERT INTO conversations (title, agent_slug)
-          VALUES ($1, $2)
+    `INSERT INTO conversations (title, agent_slug, user_id)
+          VALUES ($1, $2, $3)
        RETURNING id, title, agent_slug, created, archived`,
-    [input.title ?? null, input.agentSlug ?? 'mary'],
+    [input.title ?? null, input.agentSlug ?? 'mary', input.owner ?? null],
   );
   return rows[0];
 }
 
-/** Fetch a single conversation by id, or null if it does not exist. */
+/**
+ * Fetch a single conversation by id, or null if it does not exist. When `owner`
+ * is set (multi mode), a conversation owned by anyone else returns null — this is
+ * the isolation choke point every conversationId-bearing route relies on.
+ */
 export async function getConversation(
   id: string,
   exec: QueryFn = query,
+  owner: Owner = null,
 ): Promise<Conversation | null> {
+  if (owner === null) {
+    const rows = await exec<Conversation>(
+      `SELECT id, title, agent_slug, created, archived
+         FROM conversations
+        WHERE id = $1`,
+      [id],
+    );
+    return rows[0] ?? null;
+  }
   const rows = await exec<Conversation>(
     `SELECT id, title, agent_slug, created, archived
        FROM conversations
-      WHERE id = $1`,
-    [id],
+      WHERE id = $1 AND user_id = $2`,
+    [id, owner],
   );
   return rows[0] ?? null;
 }
@@ -114,14 +173,25 @@ export async function updateTitle(
   id: string,
   title: string | null,
   exec: QueryFn = query,
+  owner: Owner = null,
 ): Promise<Conversation | null> {
   const normalized = title && title.trim().length > 0 ? title.trim() : null;
+  if (owner === null) {
+    const rows = await exec<Conversation>(
+      `UPDATE conversations
+          SET title = $2
+        WHERE id = $1
+        RETURNING id, title, agent_slug, created, archived`,
+      [id, normalized],
+    );
+    return rows[0] ?? null;
+  }
   const rows = await exec<Conversation>(
     `UPDATE conversations
         SET title = $2
-      WHERE id = $1
+      WHERE id = $1 AND user_id = $3
       RETURNING id, title, agent_slug, created, archived`,
-    [id, normalized],
+    [id, normalized, owner],
   );
   return rows[0] ?? null;
 }
@@ -131,13 +201,24 @@ export async function setArchived(
   id: string,
   archived: boolean,
   exec: QueryFn = query,
+  owner: Owner = null,
 ): Promise<Conversation | null> {
+  if (owner === null) {
+    const rows = await exec<Conversation>(
+      `UPDATE conversations
+          SET archived = $2
+        WHERE id = $1
+        RETURNING id, title, agent_slug, created, archived`,
+      [id, archived],
+    );
+    return rows[0] ?? null;
+  }
   const rows = await exec<Conversation>(
     `UPDATE conversations
         SET archived = $2
-      WHERE id = $1
+      WHERE id = $1 AND user_id = $3
       RETURNING id, title, agent_slug, created, archived`,
-    [id, archived],
+    [id, archived, owner],
   );
   return rows[0] ?? null;
 }

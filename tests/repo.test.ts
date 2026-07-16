@@ -45,15 +45,15 @@ describe('conversations repo — SQL/param shape', () => {
     const row = { id: 'c1', title: null, agent_slug: 'mary', created: 't', archived: false };
     const { exec, calls } = mockExec([row]);
     const out = await createConversation({ title: 'Hi', agentSlug: 'mary' }, exec);
-    expect(norm(calls[0].text)).toContain('INSERT INTO conversations (title, agent_slug)');
-    expect(calls[0].params).toEqual(['Hi', 'mary']);
+    expect(norm(calls[0].text)).toContain('INSERT INTO conversations (title, agent_slug, user_id)');
+    expect(calls[0].params).toEqual(['Hi', 'mary', null]);
     expect(out).toEqual(row);
   });
 
   it('createConversation defaults title=null and agent_slug=mary', async () => {
     const { exec, calls } = mockExec([{ id: 'c1' }]);
     await createConversation({}, exec);
-    expect(calls[0].params).toEqual([null, 'mary']);
+    expect(calls[0].params).toEqual([null, 'mary', null]);
   });
 
   it('getConversation filters by id and returns null when absent', async () => {

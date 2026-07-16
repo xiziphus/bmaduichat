@@ -10,6 +10,10 @@
  */
 import { query, type QueryFn } from '@/lib/db';
 
+/** The owning user id to scope to, or null in shared mode (unscoped). Artifacts
+ *  are owned VIA their conversation, so scoping joins conversations.user_id. */
+export type Owner = string | null;
+
 export type Artifact = {
   id: string;
   conversation_id: string;
@@ -109,28 +113,58 @@ export async function searchArtifacts(
   q: string,
   limit = 8,
   exec: QueryFn = query,
+  owner: Owner = null,
 ): Promise<ArtifactSummary[]> {
+  if (owner === null) {
+    return exec<ArtifactSummary>(
+      `SELECT id, conversation_id, title, version, created
+         FROM artifacts
+        WHERE title IS NOT NULL
+          AND title ILIKE $1
+        ORDER BY created DESC
+        LIMIT $2`,
+      [`%${q}%`, limit],
+    );
+  }
   return exec<ArtifactSummary>(
-    `SELECT id, conversation_id, title, version, created
-       FROM artifacts
-      WHERE title IS NOT NULL
-        AND title ILIKE $1
-      ORDER BY created DESC
+    `SELECT a.id, a.conversation_id, a.title, a.version, a.created
+       FROM artifacts a
+       JOIN conversations c ON c.id = a.conversation_id
+      WHERE a.title IS NOT NULL
+        AND a.title ILIKE $1
+        AND c.user_id = $3
+      ORDER BY a.created DESC
       LIMIT $2`,
-    [`%${q}%`, limit],
+    [`%${q}%`, limit, owner],
   );
 }
 
-/** A single artifact by id, or null when missing. */
+/**
+ * A single artifact by id, or null when missing. When `owner` is set (multi
+ * mode), an artifact whose conversation is owned by anyone else returns null.
+ */
 export async function getById(
   id: string,
   exec: QueryFn = query,
+  owner: Owner = null,
 ): Promise<Artifact | null> {
+  if (owner === null) {
+    const rows = await exec<Artifact>(
+      `SELECT ${COLUMNS}
+         FROM artifacts
+        WHERE id = $1`,
+      [id],
+    );
+    return rows[0] ?? null;
+  }
   const rows = await exec<Artifact>(
-    `SELECT ${COLUMNS}
-       FROM artifacts
-      WHERE id = $1`,
-    [id],
+    `SELECT ${COLUMNS.split(', ')
+      .map((c) => `a.${c}`)
+      .join(', ')}
+       FROM artifacts a
+       JOIN conversations c ON c.id = a.conversation_id
+      WHERE a.id = $1 AND c.user_id = $2`,
+    [id, owner],
   );
   return rows[0] ?? null;
 }

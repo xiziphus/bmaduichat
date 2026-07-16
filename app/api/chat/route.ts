@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
+import { authContext } from '@/lib/session';
+import { getConversation } from '@/lib/repo/conversations';
 import { buildMarySystemPrompt } from '@/lib/mary';
 import {
   streamChat,
@@ -319,8 +320,8 @@ function engineChatResponse(params: EngineChatParams): Response {
 }
 
 export async function POST(req: NextRequest) {
-  const cookie = req.cookies.get(AUTH_COOKIE)?.value;
-  if (!(await verifyAuthCookie(cookie, process.env.AUTH_SECRET))) {
+  const auth = await authContext(req);
+  if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -351,6 +352,17 @@ export async function POST(req: NextRequest) {
     typeof body.conversationId === 'string' && body.conversationId.length > 0
       ? body.conversationId
       : undefined;
+
+  // Multi mode: a user may only post to a conversation they own. Verify once,
+  // up front — a foreign or missing id is rejected before any persistence or
+  // model call. Shared mode (auth.userId === null) skips this (unchanged).
+  if (auth.userId !== null && conversationId !== undefined && isPersistenceEnabled()) {
+    const owned = await getConversation(conversationId, undefined, auth.userId);
+    if (!owned) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+  }
+
   const persist = isPersistenceEnabled() && conversationId !== undefined;
 
   const lastMsg = body.messages[body.messages.length - 1] as ChatMessage;
@@ -367,7 +379,7 @@ export async function POST(req: NextRequest) {
   let modelMessages = body.messages as ChatMessage[];
   if (isPersistenceEnabled() && references.length > 0) {
     try {
-      const { context } = await resolveReferences(references);
+      const { context } = await resolveReferences(references, undefined, auth.userId);
       modelMessages = injectReferenceContext(modelMessages, context);
     } catch (err) {
       console.error('[chat] reference resolution failed', err instanceof Error ? err.name : typeof err);

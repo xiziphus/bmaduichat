@@ -21,6 +21,9 @@ no accounts, no persistence beyond the current browser tab in this first slice.
 | `PLAYGROUND_ENGINE` | no | *(off)* | **Experimental.** Unset/off → the brainstorming chat uses the hardcoded Mary prompt (the default, unchanged). Set to `on` → the same conversation runs through the **runtime engine** (`lib/runtime/*`), executing the real `bmad-brainstorming` SKILL.md instead. See [Runtime engine](#runtime-engine-experimental). |
 | `PLAYGROUND_TREE` | no | *(off)* | **Experimental.** Unset/off → the app is **byte-identical to today** (Mary is the single front door). Set to `on` → the browser shows the full **agent→command tree** (every BMad agent + command). See [Agent→command tree](#agentcommand-tree-experimental). |
 | `WEB_SEARCH_PROVIDER` | no | — | Free/keyless web-search tier for research commands (Epic D). Unset → research commands degrade honestly. **Never a paid API.** |
+| `AUTH_MODE` | no | `shared` | `shared` (default) → today's single shared password, no accounts, byte-identical. `multi` → admin-provisioned **multi-user** mode: per-user accounts + private per-user conversations. **Requires `DATABASE_URL`.** See [Multi-user mode](#multi-user-mode-experimental). |
+| `ADMIN_USERNAME` | only if `AUTH_MODE=multi` | — | Username of the bootstrapped admin (seeded once when no admin exists). |
+| `ADMIN_PASSWORD` | only if `AUTH_MODE=multi` | — | Initial admin password (bootstrap only; change it after first sign-in at `/account`). |
 
 ## Budget cap (optional, requires a database)
 
@@ -81,6 +84,27 @@ changes with no code edit.
 
 The flag ships **off**; with it off the app is byte-identical to today. Flip it
 only after an in-browser pass (same discipline as `PLAYGROUND_ENGINE`).
+
+## Multi-user mode (experimental)
+
+By default the app uses one **shared password** (`PLAYGROUND_PASSWORD`) — no
+accounts, everyone shares one space. Set **`AUTH_MODE=multi`** (needs
+`DATABASE_URL`) to switch to **admin-provisioned accounts with private per-user
+data**:
+
+- **Bootstrap:** the first sign-in (or `npm run db:migrate`) seeds a single admin
+  from `ADMIN_USERNAME` / `ADMIN_PASSWORD` when none exists.
+- **Admin** (`/admin`): create accounts (a one-time password is shown to hand
+  over) and **reset** a user's password (new one-time password) — the admin never
+  sees an existing password. No public signup.
+- **Users** change their own password at `/account`.
+- **Isolation:** each person sees only their own conversations, documents, notes,
+  and `@`-references. The admin manages accounts but **cannot read** others' chats.
+- Passwords are **scrypt-hashed + salted** (`node:crypto`, no dependency); the
+  session is a signed cookie verified on the edge.
+
+Ships **off** (`shared`); flip `AUTH_MODE=multi` + set the admin env in your host
+after a pass. Shared mode stays byte-identical.
 
 ## Builder notes outbox
 

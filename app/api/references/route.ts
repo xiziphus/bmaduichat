@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AUTH_COOKIE, verifyAuthCookie } from '@/lib/auth';
 import { isPersistenceEnabled } from '@/lib/db';
+import { authContext } from '@/lib/session';
 import { searchConversations } from '@/lib/repo/conversations';
 import { searchArtifacts } from '@/lib/repo/artifacts';
 
 // DB access → Node runtime.
 export const runtime = 'nodejs';
-
-async function authed(req: NextRequest): Promise<boolean> {
-  const cookie = req.cookies.get(AUTH_COOKIE)?.value;
-  return verifyAuthCookie(cookie, process.env.AUTH_SECRET);
-}
 
 /**
  * GET /api/references?q= — search conversations + artifacts by title for the
@@ -19,7 +14,8 @@ async function authed(req: NextRequest): Promise<boolean> {
  * with zero errors.
  */
 export async function GET(req: NextRequest) {
-  if (!(await authed(req))) {
+  const ctx = await authContext(req);
+  if (!ctx) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (!isPersistenceEnabled()) {
@@ -27,7 +23,10 @@ export async function GET(req: NextRequest) {
   }
   const q = req.nextUrl.searchParams.get('q') ?? '';
   try {
-    const [convos, arts] = await Promise.all([searchConversations(q, 8), searchArtifacts(q, 8)]);
+    const [convos, arts] = await Promise.all([
+      searchConversations(q, 8, undefined, ctx.userId),
+      searchArtifacts(q, 8, undefined, ctx.userId),
+    ]);
     return NextResponse.json({
       enabled: true,
       conversations: convos.map((c) => ({ type: 'conversation', id: c.id, title: c.title })),
