@@ -4,6 +4,7 @@ import { authContext } from '@/lib/session';
 import { isPersistenceEnabled } from '@/lib/db';
 import { getById } from '@/lib/repo/artifacts';
 import { renderMarkdownToHtml } from '@/lib/markdown';
+import { artifactFileMeta } from '@/lib/artifact-file';
 
 // react-dom/server + DB access → Node runtime.
 export const runtime = 'nodejs';
@@ -44,10 +45,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
 
   const wantsPrint = req.nextUrl.searchParams.get('print') === '1';
+  const wantsDownload = req.nextUrl.searchParams.get('download') === '1';
 
   const { id } = await ctx.params;
   let markdown: string | null = null;
   let title: string | null = null;
+  let kind: string | null = null;
   try {
     // Owner-scoped: another user's artifact returns null → 404 (isolation).
     const artifact = await getById(id, undefined, auth.userId);
@@ -56,9 +59,26 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
     markdown = artifact.markdown;
     title = artifact.title;
+    kind = artifact.kind;
   } catch (err) {
     console.error('[artifacts] fetch failed', err instanceof Error ? err.name : typeof err);
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  // Download mode: serve the RAW artifact body as its real file (.html or .md)
+  // with an attachment disposition. No styled wrapper, no sanitization change —
+  // the body is delivered verbatim so what downloads is exactly what the agent
+  // authored. Content-type is inert-served with nosniff + no-store.
+  if (wantsDownload) {
+    const meta = artifactFileMeta({ title, body: markdown, kind });
+    return new Response(markdown, {
+      headers: {
+        'Content-Type': meta.mime,
+        'Content-Disposition': `attachment; filename="${meta.filename}"`,
+        'X-Content-Type-Options': 'nosniff',
+        'Cache-Control': 'no-store',
+      },
+    });
   }
 
   const bodyHtml = renderMarkdownToHtml(markdown, 'docbody');

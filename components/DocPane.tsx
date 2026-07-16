@@ -66,6 +66,17 @@ export default function DocPane({ doc }: { doc: DocState | null }) {
           {doc?.artifactId && (
             <a
               className="act"
+              href={`/api/artifacts/${doc.artifactId}?download=1`}
+              download
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Download
+            </a>
+          )}
+          {doc?.artifactId && (
+            <a
+              className="act"
               href={`/api/artifacts/${doc.artifactId}`}
               target="_blank"
               rel="noopener noreferrer"

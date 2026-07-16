@@ -22,6 +22,7 @@ import type { AttachmentMeta } from '@/lib/attachments';
 import { createVersion } from '@/lib/repo/artifacts';
 import { parseChips } from '@/lib/chips';
 import { parseDocument } from '@/lib/document';
+import { isHtmlArtifact } from '@/lib/artifact-file';
 import { parseReferences, resolveReferences } from '@/lib/references';
 import {
   isFreeModel,
@@ -262,6 +263,9 @@ function engineChatResponse(params: EngineChatParams): Response {
                 conversationId,
                 title: document.title,
                 markdown: document.body,
+                // HTML bodies download as real .html files; markdown stays the
+                // default 'document' kind. Body is still stored in `markdown`.
+                kind: isHtmlArtifact(document.body) ? 'html' : 'document',
               });
               enqueue({ artifact: { id: artifact.id } });
             }
@@ -536,6 +540,9 @@ export async function POST(req: NextRequest) {
                 conversationId,
                 title: document.title,
                 markdown: document.body,
+                // HTML bodies download as real .html files; markdown stays the
+                // default 'document' kind. Body is still stored in `markdown`.
+                kind: isHtmlArtifact(document.body) ? 'html' : 'document',
               });
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ artifact: { id: artifact.id } })}\n\n`),

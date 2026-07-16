@@ -77,6 +77,10 @@ type UiMessage = {
   attachments?: AttachmentMeta[];
   /** Provider-native binary parts (images/PDFs) — kept in-memory for re-sends. */
   parts?: MsgPart[];
+  /** Set when this assistant turn produced a persisted artifact (DB on) — drives
+   *  the inline "📄 … · Download" chip under the bubble. */
+  artifactId?: string;
+  artifactTitle?: string | null;
 };
 
 /** Rehydrated message shape passed in from the persisted thread. */
@@ -416,9 +420,24 @@ export default function ChatPane({
         prev.map((m) => (m.id === placeholderId ? { ...m, content } : m)),
       );
     }
-    function finalizePlaceholder(content: string, chips: string[]) {
+    function finalizePlaceholder(
+      content: string,
+      chips: string[],
+      artifact?: { id: string; title: string | null },
+    ) {
       setMessages((prev) =>
-        prev.map((m) => (m.id === placeholderId ? { ...m, content, chips } : m)),
+        prev.map((m) =>
+          m.id === placeholderId
+            ? {
+                ...m,
+                content,
+                chips,
+                ...(artifact
+                  ? { artifactId: artifact.id, artifactTitle: artifact.title }
+                  : {}),
+              }
+            : m,
+        ),
       );
     }
     function replaceWithError(text: string) {
@@ -523,7 +542,14 @@ export default function ChatPane({
         lastDocRef.current = doc;
         onDocument(doc);
       }
-      finalizePlaceholder(text, chips);
+      // Attach the persisted artifact (if any) so the bubble shows an inline
+      // download link. artifactId only exists live (DB on); rehydrated threads
+      // don't carry per-message inline links (the doc pane restores the latest).
+      finalizePlaceholder(
+        text,
+        chips,
+        document && artifactId ? { id: artifactId, title: document.title } : undefined,
+      );
       captureBuilderNotes(text);
       // Epic D — a wrap-up artifact just landed: offer verified-only handoff
       // chips that carry it into another agent's command (@refer'd). With the
@@ -988,6 +1014,19 @@ export default function ChatPane({
                     📎 {a.name}
                   </span>
                 ))}
+              </div>
+            )}
+            {m.role === 'assistant' && m.artifactId && (
+              <div className="artifactlink">
+                <a
+                  className="dlchip"
+                  href={`/api/artifacts/${m.artifactId}?download=1`}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  📄 {m.artifactTitle || 'Document'} · Download
+                </a>
               </div>
             )}
             {m.chips && m.chips.length > 0 && m.id === lastMessage?.id && (
