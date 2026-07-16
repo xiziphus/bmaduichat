@@ -452,6 +452,27 @@ export async function POST(req: NextRequest) {
     // plan === null (unknown agent/code) → fall through to the normal path.
   }
 
+  // Persona chat (Epic D): an agent was activated but no command was launched —
+  // talk to THAT agent in-voice (persona + protocols, no workflow skill), so free
+  // chat after picking an agent goes to the agent, not the default Mary. Same
+  // engine path; skillSlug === agentSlug means composeAgentCommandPrompt loads no
+  // workflow, just the persona.
+  if (process.env.PLAYGROUND_TREE === 'on' && agentSlug && !code) {
+    return engineChatResponse({
+      provider: provider as Provider,
+      model,
+      free,
+      messages: modelMessages,
+      technique,
+      conversationId,
+      persist,
+      userTurn,
+      userAttachments,
+      skillSlug: agentSlug,
+      agentSlug,
+    });
+  }
+
   // Flag-gated engine path. Default (unset/off) falls straight through to the
   // hardcoded Mary path below — byte-identical to today. Only when
   // PLAYGROUND_ENGINE=on does the brainstorming conversation run through the

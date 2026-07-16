@@ -41,8 +41,13 @@ import { buildHandoffChips, type HandoffChip } from '@/lib/runtime/handoff';
 import type { DocState } from './DocPane';
 import { activeMentionQuery, stripRange, type Reference } from '@/lib/mentions';
 
-/** Epic D — the active tree command driving this conversation (if any). */
-type ActiveLaunch = { agentSlug: string; code: string };
+/** Epic D — the active tree command driving this conversation (if any). `code`
+ *  is omitted for a persona chat (an activated agent with no command launched). */
+type ActiveLaunch = { agentSlug: string; code?: string };
+
+/** The default brainstorming agent (Mary). Activating her keeps the proven
+ *  brainstorming home; every OTHER agent routes free chat to its own persona. */
+const BRAINSTORM_AGENT = 'bmad-agent-analyst';
 
 /** One autocomplete row from GET /api/references. */
 type MentionItem = { type: 'conversation' | 'artifact'; id: string; title: string };
@@ -164,6 +169,10 @@ export default function ChatPane({
   // The agent currently loaded (via activation). null = the default Mary header.
   // Shown in the chat header so you always know which agent is driving.
   const [activeAgent, setActiveAgent] = useState<{ name: string; icon: string; title: string } | null>(null);
+  // The activated agent's slug — drives ROUTING: free chat after activation talks
+  // to THIS agent's persona (not Mary), and typing one of its command codes
+  // launches that command. null = default brainstorming.
+  const [activeAgentSlug, setActiveAgentSlug] = useState<string | null>(null);
   // Epic D — the tree command currently driving this conversation (verified
   // launches only). Threaded onto every send so continuation turns stay on the
   // same skill. Null on the default (flag-off) Mary path.
@@ -562,7 +571,7 @@ export default function ChatPane({
           buildHandoffChips({
             tree: treeAgents,
             artifact: { id: artifactId, title: document.title ?? undefined },
-            self: launch ?? undefined,
+            self: launch && launch.code ? { agentSlug: launch.agentSlug, code: launch.code } : undefined,
           }),
         );
       }
@@ -679,6 +688,18 @@ export default function ChatPane({
 
   function sendMessage(text: string, atts: Attachment[] = attachments) {
     if (streaming) return;
+    // Command-code shortcut: after activating an agent, typing one of its command
+    // codes (e.g. "sd") launches that command instead of a plain chat turn.
+    const typed = text.trim();
+    if (!activeLaunch && activeAgentSlug && atts.length === 0 && typed.length > 0 && typed.length <= 4) {
+      const agent = treeAgents.find((a) => a.slug === activeAgentSlug);
+      const cmd = agent?.commands.find((c) => c.code.toLowerCase() === typed.toLowerCase());
+      if (cmd) {
+        setInput('');
+        launchCommand(activeAgentSlug, cmd.code, cmd);
+        return;
+      }
+    }
     // Capability gate: block an image/PDF the current model can't read — toast
     // and KEEP the attachment (never silently drop). Text docs always pass.
     const gate = canSend(provider, atts, support);
@@ -709,7 +730,11 @@ export default function ChatPane({
     setAttachments([]);
     setReferences([]);
     setMention(null);
-    void runChat([...messages, userMsg], undefined, refs, activeLaunch);
+    // Route to: a launched command (if any), else the activated agent's persona
+    // chat, else the default (Mary brainstorming).
+    const launch: ActiveLaunch | null =
+      activeLaunch ?? (activeAgentSlug ? { agentSlug: activeAgentSlug } : null);
+    void runChat([...messages, userMsg], undefined, refs, launch);
   }
 
   // Epic D — launch a command from the agent tree. A verified command becomes the
@@ -747,6 +772,9 @@ export default function ChatPane({
       if (!res.ok) return; // flag off / unknown agent → greet nothing (stay silent)
       const data = (await res.json()) as AgentActivation;
       setActiveAgent({ name: data.name, icon: data.icon, title: data.title });
+      // Route subsequent free chat to this agent's persona — except Mary, whose
+      // home stays the proven brainstorming default.
+      setActiveAgentSlug(data.slug === BRAINSTORM_AGENT ? null : data.slug);
       setMessages((prev) => [
         ...prev,
         { id: nextId(), role: 'status', content: composeStatusLine(data) },
