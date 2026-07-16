@@ -36,12 +36,15 @@ export default function AgentTree({
   disabled,
   activeCode,
   onLaunch,
+  onActivateAgent,
   onTreeLoaded,
 }: {
   disabled?: boolean;
   /** The currently-active command code, highlighted (if any). */
   activeCode?: string;
   onLaunch: (agentSlug: string, code: string, command: TreeCommand) => void;
+  /** Fired when the user actively PICKS an agent — drives the in-chat greeting. */
+  onActivateAgent?: (slug: string) => void;
   /** Hand the loaded tree up to the parent (for handoff-chip computation). */
   onTreeLoaded?: (agents: TreeAgent[]) => void;
 }) {
@@ -81,7 +84,13 @@ export default function AgentTree({
             key={a.slug}
             type="button"
             className={`agentbtn${a.slug === current.slug ? ' on' : ''}`}
-            onClick={() => setSelected(a.slug)}
+            disabled={disabled}
+            onClick={() => {
+              setSelected(a.slug);
+              // Greet on every active pick (including re-picking the same agent),
+              // but NOT on the initial default selection (see the load effect).
+              onActivateAgent?.(a.slug);
+            }}
             title={a.name}
           >
             <span className="agentico">{a.icon ?? '🤖'}</span>

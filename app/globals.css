@@ -70,6 +70,9 @@ input { font-family: inherit; }
 .b.user { background: var(--vio); color: #fff; align-self: flex-end; border-bottom-right-radius: 6px; }
 .b.honest { background: var(--amber); box-shadow: none; font-size: 12.5px; color: #6b5620; }
 .b.honest b { color: var(--amber-ink); }
+/* Agent-activation status line — a dim, monospace note (not a chat bubble). It
+   shows the agent reading its real files at the activation moment. */
+.statusline { align-self: flex-start; max-width: 92%; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .01em; color: var(--dim); background: var(--vio-soft); border: 1px dashed #ddd0e8; border-radius: 12px; padding: 7px 12px; line-height: 1.5; overflow-wrap: break-word; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .chips .lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
 .chip { background: #fff; border: 1.5px solid #e6dcf0; color: var(--ink); font-size: 12px; font-weight: 800; padding: 8px 14px; border-radius: 99px; box-shadow: 0 1px 4px rgba(90, 60, 130, .07); cursor: pointer; }

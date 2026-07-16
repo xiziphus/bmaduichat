@@ -6,16 +6,28 @@ import {
   webSearchProvider,
 } from '@/lib/agents/capabilities';
 
-describe('capability registry — parity seed (FR-42)', () => {
-  it('verifies ONLY bmad-agent-analyst/BP (the C-4-proven command)', () => {
-    expect(parityFor('bmad-agent-analyst', 'BP')).toBe('verified');
+describe('capability registry — parity policy (FR-42)', () => {
+  it('keeps the C-4-proven seed (bmad-agent-analyst/BP) verified', () => {
+    expect(parityFor('bmad-agent-analyst', 'BP', 'bmad-brainstorming')).toBe('verified');
   });
 
-  it('defaults every other command to unverified', () => {
-    expect(parityFor('bmad-agent-analyst', 'MR')).toBe('unverified');
-    expect(parityFor('bmad-agent-pm', 'PRD')).toBe('unverified');
-    expect(parityFor('bmad-agent-dev', 'QD')).toBe('unverified');
-    expect(parityFor('some-new-agent', 'XX')).toBe('unverified');
+  it('verifies conversational skill-backed commands (engine-runnable)', () => {
+    expect(parityFor('bmad-agent-analyst', 'MR', 'bmad-market-research')).toBe('verified');
+    expect(parityFor('bmad-agent-pm', 'PRD', 'bmad-prd')).toBe('verified');
+    expect(parityFor('bmad-agent-analyst', 'WB', 'bmad-prfaq')).toBe('verified');
+    expect(parityFor('bmad-agent-ux-designer', 'CU', 'bmad-ux')).toBe('verified');
+  });
+
+  it('verifies prompt-backed commands (no target skill — run the prompt)', () => {
+    expect(parityFor('bmad-agent-tech-writer', 'WD')).toBe('verified');
+    expect(parityFor('bmad-cis-agent-presentation-master', 'SD')).toBe('verified');
+  });
+
+  it('keeps the dev/sandbox family unverified', () => {
+    expect(parityFor('bmad-agent-dev', 'QD', 'bmad-quick-dev')).toBe('unverified');
+    expect(parityFor('bmad-agent-dev', 'DS', 'bmad-dev-story')).toBe('unverified');
+    expect(parityFor('bmad-agent-dev', 'QA', 'bmad-qa-generate-e2e-tests')).toBe('unverified');
+    expect(parityFor('wds-agent-mimir-builder', 'BU', 'bmad-wds-build')).toBe('unverified');
   });
 });
 
@@ -24,6 +36,8 @@ describe('capability registry — command families', () => {
     expect(isDevWorkflowSkill('bmad-quick-dev')).toBe(true);
     expect(isDevWorkflowSkill('bmad-dev-story')).toBe(true);
     expect(isDevWorkflowSkill('bmad-dev-auto')).toBe(true);
+    expect(isDevWorkflowSkill('bmad-qa-generate-e2e-tests')).toBe(true);
+    expect(isDevWorkflowSkill('bmad-wds-build')).toBe(true);
     expect(isDevWorkflowSkill('bmad-brainstorming')).toBe(false);
     expect(isDevWorkflowSkill(undefined)).toBe(false);
   });

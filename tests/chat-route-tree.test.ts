@@ -54,8 +54,9 @@ describe('POST /api/chat — PLAYGROUND_TREE ON routes the launch descriptor', (
   afterEach(() => vi.unstubAllEnvs());
 
   it('an UNVERIFIED command degrades honestly (+ note) without touching the engine', async () => {
-    // John/PRD is unverified in the seed → honest degrade bubble, no engine call.
-    const res = await POST(await makeReq({ agentSlug: 'bmad-agent-pm', code: 'PRD' }));
+    // Amelia/QD (bmad-quick-dev) is dev-family → unverified → honest degrade
+    // bubble, no engine call.
+    const res = await POST(await makeReq({ agentSlug: 'bmad-agent-dev', code: 'QD' }));
     const body = await res.text();
     expect(runWorkflow).not.toHaveBeenCalled();
     expect(body).toMatch(/noted for the builder/i);

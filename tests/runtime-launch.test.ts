@@ -36,15 +36,15 @@ describe('planLaunch — descriptor routing', () => {
     }
   });
 
-  it('degrades an UNVERIFIED command with an honest, note-bearing bubble', () => {
+  it('routes a VERIFIED conversational (research) command to the engine', () => {
     const plan = planLaunch('bmad-agent-analyst', 'MR', tree);
-    expect(plan?.kind).toBe('degrade');
-    if (plan?.kind === 'degrade') {
-      expect(plan.message).toMatch(/noted for the builder/i);
+    expect(plan?.kind).toBe('skill');
+    if (plan?.kind === 'skill') {
+      expect(plan.skillSlug).toBe('bmad-market-research');
     }
   });
 
-  it('degrades a dev-workflow command with a needs-sandbox reason', () => {
+  it('degrades an UNVERIFIED dev-workflow command with a needs-sandbox, note-bearing bubble', () => {
     const plan = planLaunch('bmad-agent-dev', 'QD', tree);
     expect(plan?.kind).toBe('degrade');
     if (plan?.kind === 'degrade') {

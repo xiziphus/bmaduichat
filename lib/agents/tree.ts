@@ -62,7 +62,7 @@ export function getAgentTree(agents: ManifestEntry[] = getAgents()): TreeAgent[]
       description: item.description,
       skill: item.skill,
       prompt: item.prompt,
-      parity: parityFor(agent.slug, item.code),
+      parity: parityFor(agent.slug, item.code, item.skill),
       needsSandbox: isDevWorkflowSkill(item.skill),
     })),
   }));

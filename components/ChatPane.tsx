@@ -36,6 +36,7 @@ import {
 import ModelToggle from './ModelToggle';
 import ProfileMenu from './ProfileMenu';
 import AgentTree, { type TreeAgent, type TreeCommand } from './AgentTree';
+import { composeStatusLine, composeWelcome, type AgentActivation } from '@/lib/agents/greeting';
 import { buildHandoffChips, type HandoffChip } from '@/lib/runtime/handoff';
 import type { DocState } from './DocPane';
 import { activeMentionQuery, stripRange, type Reference } from '@/lib/mentions';
@@ -66,7 +67,9 @@ type BudgetState = {
 
 type UiMessage = {
   id: string;
-  role: 'user' | 'assistant';
+  // 'status' is a client-only activation line (📂 read files …) — rendered in a
+  // distinct dim style and NEVER sent to the API (see toApiMessages).
+  role: 'user' | 'assistant' | 'status';
   content: string;
   chips?: string[];
   error?: boolean;
@@ -99,10 +102,10 @@ const nextId = () => `m${++uid}-${Date.now()}`;
  */
 function toApiMessages(msgs: UiMessage[], provider: Provider, support: SupportMap): ApiMessage[] {
   return msgs
-    .filter((m) => !m.error)
+    .filter((m) => !m.error && m.role !== 'status')
     .map((m) => {
       const parts = m.parts?.filter((p) => support[provider][p.type]);
-      const out: ApiMessage = { role: m.role, content: m.content };
+      const out: ApiMessage = { role: m.role as 'user' | 'assistant', content: m.content };
       if (parts && parts.length > 0) out.parts = parts;
       if (m.attachments && m.attachments.length > 0) out.attachments = m.attachments;
       return out;
@@ -701,6 +704,29 @@ export default function ChatPane({
     );
   }
 
+  // Epic D — the browser-native BMad activation: the user picked an agent in the
+  // tree. Read its REAL files server-side, then greet IN-VOICE with its menu —
+  // deterministic, no LLM call. Pushes a dim status line + an assistant welcome.
+  async function activateAgent(slug: string) {
+    if (streaming) return;
+    // A fresh activation clears any in-flight technique / launch / handoff state.
+    setActiveTechnique(undefined);
+    setActiveLaunch(null);
+    setHandoffChips([]);
+    try {
+      const res = await fetch(`/api/agents/${slug}`);
+      if (!res.ok) return; // flag off / unknown agent → greet nothing (stay silent)
+      const data = (await res.json()) as AgentActivation;
+      setMessages((prev) => [
+        ...prev,
+        { id: nextId(), role: 'status', content: composeStatusLine(data) },
+        { id: nextId(), role: 'assistant', content: composeWelcome(data) },
+      ]);
+    } catch {
+      /* activation is best-effort — a failed fetch just greets nothing */
+    }
+  }
+
   // Epic D — carry a finished artifact into a verified target command, with the
   // artifact pre-referenced via @refer (FR-38).
   function launchHandoff(chip: HandoffChip) {
@@ -929,7 +955,13 @@ export default function ChatPane({
             Hi, I&rsquo;m Mary. Pick a technique below, or just tell me what you&rsquo;re chewing on.
           </div>
         )}
-        {messages.map((m) => (
+        {messages.map((m) =>
+          m.role === 'status' ? (
+            // Activation status line — a distinct dim/monospace note, not a bubble.
+            <div key={m.id} className="statusline" role="status">
+              {m.content}
+            </div>
+          ) : (
           <div key={m.id}>
             <div className={`b ${m.error ? 'honest' : m.role === 'user' ? 'user' : 'mary'}`}>
               {m.error ? (
@@ -975,7 +1007,8 @@ export default function ChatPane({
               </div>
             )}
           </div>
-        ))}
+          ),
+        )}
       </div>
 
       {pair && (
@@ -1008,6 +1041,7 @@ export default function ChatPane({
         disabled={streaming}
         activeCode={activeLaunch?.code}
         onLaunch={launchCommand}
+        onActivateAgent={activateAgent}
         onTreeLoaded={setTreeAgents}
       />
 

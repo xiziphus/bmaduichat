@@ -50,12 +50,14 @@ describe('getAgentTree — manifest→tree projection (FR-40)', () => {
     expect(mary.commands[0].skill).toBe('bmad-brainstorming');
   });
 
-  it('joins parity from the registry (BP verified, everything else unverified)', () => {
+  it('joins parity from the registry (conversational verified, dev family unverified)', () => {
     const mary = tree.find((a) => a.slug === 'bmad-agent-analyst')!;
     expect(mary.commands.find((c) => c.code === 'BP')!.parity).toBe('verified');
-    expect(mary.commands.find((c) => c.code === 'MR')!.parity).toBe('unverified');
+    expect(mary.commands.find((c) => c.code === 'MR')!.parity).toBe('verified');
     const john = tree.find((a) => a.slug === 'bmad-agent-pm')!;
-    expect(john.commands[0].parity).toBe('unverified');
+    expect(john.commands[0].parity).toBe('verified'); // PRD → bmad-prd, conversational
+    const amelia = tree.find((a) => a.slug === 'bmad-agent-dev')!;
+    expect(amelia.commands[0].parity).toBe('unverified'); // QD → bmad-quick-dev, needs sandbox
   });
 
   it('flags dev-workflow commands as needs-sandbox', () => {
