@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   composeBrainstormingPrompt,
   referencesForPhase,
+  inferPhase,
+  ADAPTER_NOTE,
   ENGINE_OUTPUT_CONTRACT,
+  PROMPT_SIZE_BUDGET,
 } from '@/lib/runtime/brainstorming';
 import { APP_PROTOCOLS } from '@/lib/mary';
 import { getTechniques } from '@/lib/techniques-catalog';
@@ -17,7 +20,7 @@ async function collect(gen: AsyncGenerator<RunEvent, void, void>): Promise<RunEv
   return out;
 }
 
-describe('composeBrainstormingPrompt — adapted skill text + APP_PROTOCOLS', () => {
+describe('composeBrainstormingPrompt — verbatim SKILL.md + adapter note + APP_PROTOCOLS', () => {
   const prompt = composeBrainstormingPrompt();
 
   it("prepends Mary's persona so engine-Mary has her voice + 📊 icon", () => {
@@ -42,11 +45,36 @@ describe('composeBrainstormingPrompt — adapted skill text + APP_PROTOCOLS', ()
     expect(prompt).toContain(`${APP_PROTOCOLS}\n\n${ENGINE_OUTPUT_CONTRACT}`);
   });
 
-  it('includes the loaded, adapted brainstorming SKILL.md text', () => {
+  it('includes the loaded brainstorming SKILL.md text', () => {
     // Framing sentinel from SKILL.md, and the Creative Partner stance from
     // mode-partner.md — both come from the loaded files, not hand-written copy.
     expect(prompt).toContain('Aim past 100 ideas');
     expect(prompt).toContain('Their fire, your kindling.');
+  });
+
+  it('quotes the FULL SKILL.md VERBATIM — no distillation, CLI sections kept intact', () => {
+    // A distinctive mid-SKILL sentence proves the whole file is present unedited.
+    expect(prompt).toContain(
+      'The session runs in one of three stances, chosen by the user',
+    );
+    expect(prompt).toContain('## On Activation'); // section NOT dropped
+    expect(prompt).toContain('Choosing Techniques');
+    // BMad's CLI mechanics survive verbatim (the adapter note tells the model to
+    // reinterpret them rather than us editing BMad's words).
+    expect(prompt).toContain('uv run');
+    expect(prompt).toContain('memlog.py');
+    expect(prompt).toContain('{project-root}');
+  });
+
+  it('prepends the ADAPTER NOTE (our words) between the persona and the SKILL.md', () => {
+    expect(prompt).toContain(ADAPTER_NOTE);
+    expect(prompt).toContain('OPERATING CONTEXT');
+    // Order: persona → adapter note → verbatim SKILL.md (framing sentinel).
+    expect(prompt.indexOf('You are Mary')).toBeLessThan(prompt.indexOf(ADAPTER_NOTE));
+    expect(prompt.indexOf(ADAPTER_NOTE)).toBeLessThan(prompt.indexOf('Aim past 100 ideas'));
+    // The note names the leak-prone mechanics so the model never speaks them.
+    expect(prompt).toContain('technique-picker.html');
+    expect(prompt).toContain('paste the result back');
   });
 
   it('layers the shared APP_PROTOCOLS block verbatim on top', () => {
@@ -54,12 +82,6 @@ describe('composeBrainstormingPrompt — adapted skill text + APP_PROTOCOLS', ()
     expect(prompt).toContain('CHIPS PROTOCOL');
     expect(prompt).toContain('DOCUMENT PROTOCOL');
     expect(prompt).toContain('noted for the builder');
-  });
-
-  it('adapts (strips) CLI-only BMad mechanics that do not exist in this app', () => {
-    expect(prompt).not.toContain('uv run');
-    expect(prompt).not.toContain('memlog.py');
-    expect(prompt).not.toContain('{project-root}');
   });
 
   it('appends the CURRENT TECHNIQUE injection when a technique is launched', () => {
@@ -70,16 +92,46 @@ describe('composeBrainstormingPrompt — adapted skill text + APP_PROTOCOLS', ()
     expect(prompt).not.toContain('CURRENT TECHNIQUE');
   });
 
-  it('selects references by phase (converge/finalize add narrowing + synthesis refs)', () => {
+  it('selects ONLY the active phase reference (one ref per phase, not all three)', () => {
     expect(referencesForPhase('diverge')).toEqual(['mode-partner.md']);
-    expect(referencesForPhase('converge')).toEqual(['mode-partner.md', 'converge.md']);
-    expect(referencesForPhase('finalize')).toEqual([
-      'mode-partner.md',
-      'converge.md',
-      'finalize.md',
-    ]);
-    // No phase → all relevant refs so a full single-run session is covered.
-    expect(referencesForPhase()).toContain('finalize.md');
+    expect(referencesForPhase('converge')).toEqual(['converge.md']);
+    expect(referencesForPhase('finalize')).toEqual(['finalize.md']);
+    // No phase → opening/diverge default: mode-partner only.
+    expect(referencesForPhase()).toEqual(['mode-partner.md']);
+  });
+
+  it('opening prompt has mode-partner but NOT the converge/finalize reference text', () => {
+    // mode-partner.md sentinel present…
+    expect(prompt).toContain('Their fire, your kindling.');
+    // …converge.md + finalize.md sentinels absent (those refs are not loaded).
+    expect(prompt).not.toContain('Narrow & Decide'); // converge.md H1
+    expect(prompt).not.toContain('Imaginative HTML keepsake'); // finalize.md artifact step
+  });
+
+  it('converge phase loads the converge reference (and not mode-partner)', () => {
+    const converge = composeBrainstormingPrompt({ phase: 'converge' });
+    expect(converge).toContain('Narrow & Decide'); // converge.md H1
+    expect(converge).not.toContain('Their fire, your kindling.'); // mode-partner.md
+    // Persona + protocols + contract still present.
+    expect(converge).toContain('You are Mary');
+    expect(converge).toContain(APP_PROTOCOLS);
+    expect(converge.trimEnd().endsWith(ENGINE_OUTPUT_CONTRACT.trimEnd())).toBe(true);
+  });
+
+  it('is smaller than the prior all-references prompt (per-phase JIT ref loading)', () => {
+    // Prior behavior composed the full SKILL.md + ALL THREE references (~21k
+    // chars). Loading only the active phase reference keeps the opening prompt
+    // below that baseline and under the size budget — the full SKILL.md is still
+    // present verbatim, we just don't stack every reference on top.
+    expect(prompt.length).toBeLessThan(20000);
+    expect(prompt.length).toBeLessThan(PROMPT_SIZE_BUDGET);
+  });
+
+  it('inferPhase reads the coarse phase from the latest user message', () => {
+    expect(inferPhase('here are some wild ideas for the app')).toBe('diverge');
+    expect(inferPhase()).toBe('diverge');
+    expect(inferPhase("let's narrow these down and prioritize")).toBe('converge');
+    expect(inferPhase('ok wrap it up into a doc')).toBe('finalize');
   });
 });
 

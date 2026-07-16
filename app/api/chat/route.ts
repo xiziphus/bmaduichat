@@ -12,7 +12,7 @@ import {
   type Provider,
 } from '@/lib/llm';
 import { runWorkflow } from '@/lib/runtime/engine';
-import { BRAINSTORMING_SLUG } from '@/lib/runtime/brainstorming';
+import { BRAINSTORMING_SLUG, inferPhase } from '@/lib/runtime/brainstorming';
 import type { ToolMsg } from '@/lib/runtime/types';
 import { isPersistenceEnabled, transaction } from '@/lib/db';
 import { buildAppendMessageQuery } from '@/lib/repo/messages';
@@ -176,6 +176,10 @@ function engineChatResponse(params: EngineChatParams): Response {
             inputParts,
             history,
             technique,
+            // Fresh runs re-derive phase from the latest user message so a full
+            // session still reaches converge/finalize (the engine finalizes each
+            // turn, so phase isn't carried in run state across turns).
+            phase: inferPhase(input),
             provider,
             model,
             deps: { persistence: enginePersistence },
