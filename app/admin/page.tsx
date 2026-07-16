@@ -9,6 +9,7 @@ export default function AdminPage() {
   const router = useRouter();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [newName, setNewName] = useState('');
+  const [newPass, setNewPass] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // The one-time password to hand over, keyed by a label (username), shown once.
@@ -40,7 +41,9 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: newName }),
+        body: JSON.stringify(
+          newPass.trim() ? { username: newName, password: newPass } : { username: newName },
+        ),
       });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
@@ -50,6 +53,7 @@ export default function AdminPage() {
       if (res.ok && data.user && data.password) {
         setHandoff({ label: data.user.username, password: data.password });
         setNewName('');
+        setNewPass('');
         await load();
       } else {
         setErr(data.error ?? 'Could not create user.');
@@ -108,10 +112,19 @@ export default function AdminPage() {
           autoCapitalize="none"
           autoCorrect="off"
         />
+        <input
+          type="text"
+          placeholder="password (optional)"
+          value={newPass}
+          onChange={(e) => setNewPass(e.target.value)}
+          autoCapitalize="none"
+          autoCorrect="off"
+        />
         <button type="submit" disabled={busy || newName.trim().length === 0}>
           {busy ? 'creating…' : 'create account'}
         </button>
       </form>
+      <div className="ahint">Leave the password blank to auto-generate one. Either way, you’ll get the value to hand over.</div>
 
       <ul className="alist">
         {users.map((u) => (

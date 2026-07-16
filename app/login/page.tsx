@@ -77,11 +77,6 @@ export default function LoginPage() {
           {busy ? 'checking…' : 'come on in'}
         </button>
       </form>
-      {multi && (
-        <a className="loginlink" href="/account">
-          change my password
-        </a>
-      )}
     </div>
   );
 }

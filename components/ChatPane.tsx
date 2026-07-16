@@ -34,6 +34,7 @@ import {
   type BuilderNote,
 } from '@/lib/builder-notes';
 import ModelToggle from './ModelToggle';
+import ProfileMenu from './ProfileMenu';
 import AgentTree, { type TreeAgent, type TreeCommand } from './AgentTree';
 import { buildHandoffChips, type HandoffChip } from '@/lib/runtime/handoff';
 import type { DocState } from './DocPane';
@@ -918,6 +919,7 @@ export default function ChatPane({
               </div>
             )}
           </div>
+          <ProfileMenu />
         </div>
       </div>
 
