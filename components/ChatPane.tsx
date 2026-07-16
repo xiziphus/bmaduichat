@@ -161,6 +161,9 @@ export default function ChatPane({
   const [catalog, setCatalog] = useState<Technique[]>([]);
   const [pair, setPair] = useState<[Technique, Technique] | null>(null);
   const [activeTechnique, setActiveTechnique] = useState<Technique | undefined>(undefined);
+  // The agent currently loaded (via activation). null = the default Mary header.
+  // Shown in the chat header so you always know which agent is driving.
+  const [activeAgent, setActiveAgent] = useState<{ name: string; icon: string; title: string } | null>(null);
   // Epic D — the tree command currently driving this conversation (verified
   // launches only). Threaded onto every send so continuation turns stay on the
   // same skill. Null on the default (flag-off) Mary path.
@@ -743,6 +746,7 @@ export default function ChatPane({
       const res = await fetch(`/api/agents/${slug}`);
       if (!res.ok) return; // flag off / unknown agent → greet nothing (stay silent)
       const data = (await res.json()) as AgentActivation;
+      setActiveAgent({ name: data.name, icon: data.icon, title: data.title });
       setMessages((prev) => [
         ...prev,
         { id: nextId(), role: 'status', content: composeStatusLine(data) },
@@ -837,10 +841,14 @@ export default function ChatPane({
   return (
     <main id="chat">
       <div className="hdr">
-        <div className="ava">M</div>
+        <div className={`ava${activeAgent ? ' agent' : ''}`}>
+          {activeAgent ? activeAgent.icon : 'M'}
+        </div>
         <div>
-          <b>Mary</b>
-          <small>Business Analyst · brainstorming with you</small>
+          <b>{activeAgent ? activeAgent.name : 'Mary'}</b>
+          <small>
+            {activeAgent ? activeAgent.title : 'Business Analyst · brainstorming with you'}
+          </small>
         </div>
         {activeTechnique && (
           <span className="mode">
