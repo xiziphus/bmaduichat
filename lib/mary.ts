@@ -58,7 +58,13 @@ Rules:
 - Emit a <document> block ONLY at real synthesis/wrap-up moments, not every turn. Regenerating produces a fresh version — that's expected.
 - Order within the reply: your short prose note first, then the <document> block, then the chips block LAST.`;
 
-function buildPersona(): string {
+/**
+ * Mary's persona header, sliced live from the analyst agent's resolved config
+ * (name/icon/role/identity/communication-style/principles). Exported so the
+ * runtime engine composes engine-Mary with the EXACT same voice + 📊 icon as the
+ * hardcoded path — no divergent hand-written copy.
+ */
+export function buildMaryPersona(): string {
   const p = getBmadSections().persona;
   return `You are ${p.name}, the ${p.title}.
 
@@ -141,7 +147,7 @@ export function buildMarySystemPrompt(techniqueId?: string): string {
   const b = getBmadSections();
 
   const sections: string[] = [
-    buildPersona(),
+    buildMaryPersona(),
     `FRAMING — hold this the whole run.\n${b.framing}`,
     `STANCE — Creative Partner. This app runs the Creative Partner stance.\n${b.stance}`,
     `KICKOFF — starting a session:\n${b.kickoff}`,
