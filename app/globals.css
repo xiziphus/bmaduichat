@@ -364,6 +364,9 @@ input { font-family: inherit; }
 .modalcard button[type="submit"]:disabled { opacity: .6; }
 .modalcard .err { background: var(--amber); color: var(--amber-ink); font-size: 12px; font-weight: 800; border-radius: 12px; padding: 9px 13px; margin-bottom: 11px; }
 .modalcard .ok { background: var(--mint, #e4f4e0); color: var(--mint-ink, #2e7040); font-size: 12px; font-weight: 800; border-radius: 12px; padding: 9px 13px; margin-bottom: 11px; }
+.modalcard.help { width: min(440px, 100%); }
+.modalcard.help p { font-size: 13.5px; line-height: 1.6; color: var(--ink); margin-bottom: 12px; }
+.modalcard.help .helpdone { width: 100%; background: var(--vio); color: #fff; border-radius: 14px; padding: 11px; font-weight: 900; font-size: 14px; box-shadow: 0 4px 0 #57367f; margin-top: 2px; }
 
 /* ================= PHONE ================= */
 @media (max-width: 800px) {

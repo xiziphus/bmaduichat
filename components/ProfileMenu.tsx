@@ -14,6 +14,7 @@ export default function ProfileMenu() {
   const [me, setMe] = useState<Me | null>(null);
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,6 +71,16 @@ export default function ProfileMenu() {
             type="button"
             role="menuitem"
             onClick={() => {
+              setHelpOpen(true);
+              setOpen(false);
+            }}
+          >
+            ❓ What is BMad?
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
               setPwOpen(true);
               setOpen(false);
             }}
@@ -87,6 +98,41 @@ export default function ProfileMenu() {
         </div>
       )}
       {pwOpen && <ChangePasswordModal onClose={() => setPwOpen(false)} />}
+      {helpOpen && <BmadHelpModal onClose={() => setHelpOpen(false)} />}
+    </div>
+  );
+}
+
+function BmadHelpModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modalbg" onMouseDown={onClose}>
+      <div className="modalcard help" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="modalhd">
+          <b>❓ What is BMad?</b>
+          <button type="button" className="modalx" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <p>
+          <b>BMad</b> is a structured way to think with AI. Instead of one open-ended chat, you work
+          with <b>specialist agents</b> — each a focused persona (Mary the analyst, John the PM,
+          Winston the architect…) with a menu of <b>guided workflows</b>.
+        </p>
+        <p>
+          A workflow runs in real <b>phases</b> — it asks, diverges, converges, and ends with a
+          proper <b>document</b> you can keep (downloadable as a PDF). That structure is the point:
+          it beats a blank ChatGPT box because it drives you to a decision and an artifact.
+        </p>
+        <p>
+          <b>Where we are:</b> <b>Mary</b> (guided brainstorming) is fully live here. The other
+          agents show in the picker so you can see the full breadth, but they’re not wired up yet —
+          they’ll say so honestly rather than fake it. Agents also can’t browse the web or run code
+          in this app; when something’s out of reach, they say so.
+        </p>
+        <button type="button" className="helpdone" onClick={onClose}>
+          got it
+        </button>
+      </div>
     </div>
   );
 }
