@@ -76,9 +76,13 @@ export function buildAgentPersona(agentSlug: string): string {
 /**
  * The runtime system prompt for a launched command. When `skillSlug` differs
  * from `agentSlug` it's a skill-backed command: persona + adapter note + the
- * adapted SKILL.md + protocols. When they're equal it's a prompt-backed command
- * (no workflow skill): persona + protocols only, and the caller runs the prompt
- * text as the launch turn.
+ * adapted SKILL.md + protocols.
+ *
+ * When they're equal it's PERSONA CHAT (free chat with the agent, no launched
+ * workflow). We STILL load + adapt the agent's OWN SKILL.md and include it, so a
+ * free-chatted agent carries its own operating instructions — not just its
+ * persona scalars + protocols. Only if the agent ships no loadable SKILL.md do
+ * we fall back to persona-only.
  */
 export function composeAgentCommandPrompt(opts: {
   agentSlug: string;
@@ -88,6 +92,7 @@ export function composeAgentCommandPrompt(opts: {
   const parts: string[] = [persona];
 
   if (opts.skillSlug !== opts.agentSlug) {
+    // Skill-backed command: adapt the target workflow's SKILL.md.
     let skillText = `You are running the "${opts.skillSlug}" workflow.`;
     try {
       skillText = adaptMechanics(loadSkill(opts.skillSlug).skillMd);
@@ -95,6 +100,16 @@ export function composeAgentCommandPrompt(opts: {
       /* keep the honest fallback line */
     }
     parts.push(ADAPTER_NOTE, skillText);
+  } else {
+    // Persona chat: fold in the agent's OWN adapted SKILL.md so free chat isn't
+    // stripped of the agent's operating instructions. Persona-only fallback if
+    // the agent has no SKILL.md to load.
+    try {
+      const skillText = adaptMechanics(loadSkill(opts.agentSlug).skillMd);
+      parts.push(ADAPTER_NOTE, skillText);
+    } catch {
+      /* no SKILL.md → persona-only */
+    }
   }
 
   // App conventions LAST so the chips/<document> contract wins attention.

@@ -29,9 +29,23 @@ describe('composeAgentCommandPrompt — persona + adapted skill + app protocols'
     expect(prompt).toContain(HONEST_LIMITS); // part of APP_PROTOCOLS
   });
 
-  it('a prompt-backed command (skillSlug === agentSlug) is persona-only, no adapter note', () => {
+  it("persona chat (skillSlug === agentSlug) folds in the agent's OWN adapted SKILL.md", () => {
     const prompt = composeAgentCommandPrompt({ agentSlug: 'bmad-agent-pm', skillSlug: 'bmad-agent-pm' });
     expect(prompt).toMatch(/You are John/);
+    // The agent's own SKILL.md is now loaded + adapted (not skipped): its adapter
+    // note is present and a distinctive line from bmad-agent-pm/SKILL.md appears.
+    expect(prompt).toContain(ADAPTER_NOTE);
+    expect(prompt).toContain(
+      'You drive PRD creation through user interviews, requirements discovery, and stakeholder alignment',
+    );
+    // Non-trivial length (persona + full adapted SKILL.md + protocols).
+    expect(prompt.length).toBeGreaterThan(2000);
+    expect(prompt).toContain(HONEST_LIMITS);
+  });
+
+  it('persona chat falls back to persona-only when the agent has no SKILL.md', () => {
+    const prompt = composeAgentCommandPrompt({ agentSlug: 'no-such-agent', skillSlug: 'no-such-agent' });
+    // No loadable SKILL.md → no adapter note, just persona + protocols.
     expect(prompt).not.toContain(ADAPTER_NOTE);
     expect(prompt).toContain(HONEST_LIMITS);
   });

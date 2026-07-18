@@ -1,12 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { runWorkflow, type RunWorkflowInput } from '@/lib/runtime/engine';
+import {
+  runWorkflow,
+  composeSeedHistory,
+  HISTORY_CHAR_BUDGET,
+  HISTORY_MAX_TURNS,
+  type RunWorkflowInput,
+} from '@/lib/runtime/engine';
 import { parseRunState } from '@/lib/runtime/state';
+import type { RunEventRow } from '@/lib/repo/run-events';
 import type {
   ModelClient,
   ModelTurn,
   RunEvent,
   RunStore,
   RunState,
+  ToolMsg,
   ToolExecutor,
 } from '@/lib/runtime/types';
 
@@ -75,6 +83,83 @@ const base = (over: Partial<RunWorkflowInput>): RunWorkflowInput => ({
   input: 'help me brainstorm',
   provider: 'gemini',
   ...over,
+});
+
+describe('composeSeedHistory — deterministic compaction + memlog recall', () => {
+  const userMsg = (content: string): ToolMsg => ({ role: 'user', content });
+  const asstMsg = (content: string): ToolMsg => ({ role: 'assistant', content });
+
+  it('passes short history WHOLE — no memory block (byte-identical to before)', () => {
+    const history: ToolMsg[] = [userMsg('hi'), asstMsg('hello'), userMsg('idea?')];
+    const seed = composeSeedHistory(history);
+    expect(seed).toBe(history); // same reference: untouched
+    expect(seed.some((m) => 'content' in m && m.content.includes('condensed'))).toBe(false);
+  });
+
+  it('windows over-budget history and prepends a condensed memory block', () => {
+    // Build a history that clearly exceeds the char budget.
+    const big = 'x'.repeat(1000);
+    const history: ToolMsg[] = [];
+    for (let i = 0; i < 20; i++) history.push(i % 2 === 0 ? userMsg(`${big} u${i}`) : asstMsg(`${big} a${i}`));
+    const total = history.reduce((n, m) => n + ('content' in m ? m.content.length : 0), 0);
+    expect(total).toBeGreaterThan(HISTORY_CHAR_BUDGET);
+
+    const seed = composeSeedHistory(history);
+    // First entry is the memory block.
+    const first = seed[0];
+    expect('content' in first ? first.content : '').toContain('[Earlier in this conversation, condensed:]');
+    // Windowed: fewer turns than the original + the memory block, and within caps.
+    expect(seed.length).toBeLessThan(history.length + 1);
+    expect(seed.length - 1).toBeLessThanOrEqual(HISTORY_MAX_TURNS);
+    const seedChars = seed.slice(1).reduce((n, m) => n + ('content' in m ? m.content.length : 0), 0);
+    expect(seedChars).toBeLessThanOrEqual(HISTORY_CHAR_BUDGET);
+    // The most-recent turn survives verbatim.
+    expect('content' in seed[seed.length - 1] ? (seed[seed.length - 1] as { content: string }).content : '').toContain('a19');
+  });
+
+  it('folds recalled memlog entries into the memory block (even under budget)', () => {
+    const history: ToolMsg[] = [userMsg('hi'), asstMsg('hello')];
+    const events: RunEventRow[] = [
+      { id: '1', run_id: 'r', type: 'decision', text: 'chose the marketplace angle', by: 'mary', created: 't1' },
+      { id: '2', run_id: 'r', type: 'idea', text: 'referral loop', by: 'user', created: 't2' },
+    ];
+    const seed = composeSeedHistory(history, events);
+    const block = 'content' in seed[0] ? (seed[0] as { content: string }).content : '';
+    expect(block).toContain("Key points recalled from this session's running record:");
+    expect(block).toContain('[decision] chose the marketplace angle');
+    expect(block).toContain('[idea] referral loop');
+    // Verbatim turns still follow the block.
+    expect(seed.length).toBe(history.length + 1);
+  });
+});
+
+describe('runWorkflow — memlog recall surfaces in the seeded transcript', () => {
+  it('reads run_events via injected listRunEvents and folds them into the seed', async () => {
+    const { store } = memoryStore();
+    const events: RunEventRow[] = [
+      { id: '1', run_id: 'r', type: 'decision', text: 'chose the marketplace angle', by: 'mary', created: 't1' },
+    ];
+    let sawRecall = false;
+    const model: ModelClient = async (_sys, messages) => {
+      const joined = messages.map((m) => ('content' in m ? m.content : '')).join(' | ');
+      if (joined.includes('chose the marketplace angle')) sawRecall = true;
+      return { text: 'ok', toolCalls: [], usage: noUsage } as ModelTurn;
+    };
+    await collect(
+      runWorkflow(
+        base({
+          input: 'continue',
+          deps: {
+            model,
+            persistence: true,
+            store,
+            listRunEvents: async () => events,
+          },
+        }),
+      ),
+    );
+    expect(sawRecall).toBe(true);
+  });
 });
 
 describe('runWorkflow — checkpoint persist then cross-session resume', () => {

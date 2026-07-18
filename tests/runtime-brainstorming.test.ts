@@ -135,6 +135,23 @@ describe('composeBrainstormingPrompt — verbatim SKILL.md + adapter note + APP_
   });
 });
 
+describe('ADAPTER_NOTE — faithfulness clauses (no fake subagents, honest memory)', () => {
+  it('states plainly there are NO subagents / parallel workers / background jobs', () => {
+    expect(ADAPTER_NOTE).toContain('You have NO subagents, parallel workers, or background jobs');
+    // Do the work yourself, sequentially — never narrate parallel/background work.
+    expect(ADAPTER_NOTE).toMatch(/do that work YOURSELF, sequentially/);
+    expect(ADAPTER_NOTE).toMatch(/Never claim, narrate, or pretend/);
+  });
+
+  it('no longer tells the model memory lives ONLY in its own context', () => {
+    // Softened for real compaction: the model MAY note to the running record and
+    // must NOT be told the whole conversation is only in its own context.
+    expect(ADAPTER_NOTE).not.toMatch(/keep the session's memory in your own context/);
+    expect(ADAPTER_NOTE).toMatch(/note key ideas and decisions to the running record/);
+    expect(ADAPTER_NOTE).toMatch(/do NOT assume the whole conversation lives only in your own context/);
+  });
+});
+
 describe('engine path — chips + <document> survive to the client stream', () => {
   it('emits the assistant text verbatim, including <document> and <chips> blocks', async () => {
     const reply =
