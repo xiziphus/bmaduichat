@@ -92,9 +92,11 @@ export function isResearchSkill(skill?: string): boolean {
 }
 
 /**
- * The configured free/keyless web-search provider (env `WEB_SEARCH_PROVIDER`),
- * or undefined when unset. NEVER a paid API — an unconfigured provider makes the
- * research command degrade honestly (see lib/runtime/tools.ts).
+ * Optional builder hint for a preferred free web-search provider (env
+ * `WEB_SEARCH_PROVIDER`), or undefined when unset. No longer REQUIRED: the
+ * web_search tool is backed by a free multi-provider fallback chain
+ * (lib/websearch, ordered via `WEB_SEARCH_ORDER`) whose keyless floor
+ * (DuckDuckGo + Wikipedia) is always available. NEVER a paid API.
  */
 export function webSearchProvider(): string | undefined {
   const v = process.env.WEB_SEARCH_PROVIDER;

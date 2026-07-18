@@ -18,7 +18,8 @@ import { getTechniques } from '@/lib/techniques-catalog';
 import { appendRunEvent as dbAppendRunEvent } from '@/lib/repo/run-events';
 import { createVersion } from '@/lib/repo/artifacts';
 import { listArtifacts } from '@/lib/repo/artifacts';
-import { isResearchSkill, webSearchProvider } from '@/lib/agents/capabilities';
+import { isResearchSkill } from '@/lib/agents/capabilities';
+import { webSearch } from '@/lib/websearch';
 
 /* ---------------- schemas ---------------- */
 
@@ -94,13 +95,13 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
  * The free-tier `web_search` tool (FR-41), offered ONLY to research-family
  * skills. Kept OUT of the fixed `TOOL_SCHEMAS` above so it never changes the
  * brainstorming / non-research runs; `toolSchemasFor(skill)` appends it for a
- * research skill. Degrades honestly (never a paid API) when no free provider is
- * configured (env `WEB_SEARCH_PROVIDER`).
+ * research skill. Backed by a free multi-provider fallback chain (lib/websearch)
+ * — always functional via keyless providers, never a paid API.
  */
 export const WEB_SEARCH_SCHEMA: ToolSchema = {
   name: 'web_search',
   description:
-    'Search the web via the builder-configured FREE search tier for facts/sources this research needs. Returns short result snippets. If no provider is configured it returns an honest note (there is no paid fallback).',
+    'Search the web via a free multi-provider fallback chain for facts/sources this research needs. Returns short result snippets. Always free — never a paid API; if every provider is empty it returns an honest note.',
   parameters: OBJ({ query: STR('The search query.') }, ['query']),
 };
 
@@ -181,22 +182,25 @@ function str(v: unknown, fallback = ''): string {
   return typeof v === 'string' ? v : fallback;
 }
 
-/** The honest degrade returned when no free web-search provider is wired up. */
+/**
+ * The honest degrade returned when a web search can't complete at all. Kept for
+ * the injectable `ctx.webSearch` seam and the executor's error path; the default
+ * path below now runs the free multi-provider chain instead of gating on config.
+ */
 export const WEB_SEARCH_UNCONFIGURED =
   "Web search isn't wired up here yet — no free provider is configured, and I won't reach a paid one. Noted for the builder. Paste any facts or sources you have and I'll fold them in.";
 
 /**
- * Default free-tier web search. Honors `WEB_SEARCH_PROVIDER` (a free/keyless
- * tier only); with none configured — or a provider we don't implement yet — it
- * returns the honest note above rather than calling any paid API.
+ * Default web search — runs the free multi-provider fallback chain
+ * (lib/websearch): key-optional FREE tiers (Brave, Tavily) first when their key
+ * is set, then the always-on keyless floor (DuckDuckGo, Wikipedia). The keyless
+ * pair makes this ALWAYS functional; it never reaches a paid API. Returns the
+ * formatted result block with a short provider prefix, or an honest note when
+ * the whole chain comes up empty.
  */
-async function defaultWebSearch(_query: string): Promise<string> {
-  void _query;
-  const provider = webSearchProvider();
-  if (!provider) return WEB_SEARCH_UNCONFIGURED;
-  // A free provider is named but no keyless client is wired in this build — stay
-  // honest (never a paid fallback) and capture the demand for the builder.
-  return `Web search via "${provider}" isn't wired up in this build yet. Noted for the builder. Paste any facts or sources you have and I'll fold them in.`;
+async function defaultWebSearch(query: string): Promise<string> {
+  const { text, provider } = await webSearch(query);
+  return provider ? `Web results (via ${provider}):\n${text}` : text;
 }
 
 /**

@@ -14,13 +14,17 @@ no accounts, no persistence beyond the current browser tab in this first slice.
 | `GEMINI_API_KEY` | only if using Gemini | — | Google Generative Language API key |
 | `GEMINI_MODEL` | no | `gemini-2.5-flash` | Gemini model id |
 | `OPENROUTER_API_KEY` | only if using OpenRouter | — | OpenRouter API key |
-| `OPENROUTER_MODEL` | no | `meta-llama/llama-3.3-70b-instruct:free` | OpenRouter model id (pick any free-tier model) |
+| `OPENROUTER_MODEL` | no | `meta-llama/llama-3.3-70b-instruct:free` | OpenRouter model id (pick any free-tier model) — the primary model |
+| `OPENROUTER_MODELS` | no | — | **Redundancy.** Comma-separated ordered list of free OpenRouter models. The chat tries them in order and falls to the next if one is rate-limited/errors/unavailable. Unset → `OPENROUTER_MODEL` + a built-in free-model fallback list. |
 | `OPENROUTER_MULTIMODAL` | no | `false` | Force image/PDF support on for OpenRouter. See [Attachments](#attachments-images-pdfs-docs--voice). |
 | `DATABASE_URL` | no (optional) | — | Neon Postgres connection string. **Unset → the app runs exactly as before** (ephemeral, in-tab conversations). Set + migrated → conversations and history persist. |
 | `BUDGET_USD` | no | `10` | Monthly spend cap (USD). A safety net, not accounting — cost is **estimated** from a small per-model price table. Requires `DATABASE_URL`; with no DB there's no metering or cap. |
 | `PLAYGROUND_ENGINE` | no | *(off)* | **Experimental.** Unset/off → the brainstorming chat uses the hardcoded Mary prompt (the default, unchanged). Set to `on` → the same conversation runs through the **runtime engine** (`lib/runtime/*`), executing the real `bmad-brainstorming` SKILL.md instead. See [Runtime engine](#runtime-engine-experimental). |
 | `PLAYGROUND_TREE` | no | *(off)* | **Experimental.** Unset/off → the app is **byte-identical to today** (Mary is the single front door). Set to `on` → the browser shows the full **agent→command tree** (every BMad agent + command). See [Agent→command tree](#agentcommand-tree-experimental). |
-| `WEB_SEARCH_PROVIDER` | no | — | Free/keyless web-search tier for research commands (Epic D). Unset → research commands degrade honestly. **Never a paid API.** |
+| `WEB_SEARCH_PROVIDER` | no | — | Optional hint only (retained for back-compat). The web-search chain no longer requires it. **Never a paid API.** |
+| `WEB_SEARCH_ORDER` | no | `brave,tavily,ddg,wikipedia` | **Redundancy.** Comma-separated provider pecking-order for the research `web_search` tool. Tries each in turn; first with results wins; all-fail returns an honest note. Keyless **DuckDuckGo + Wikipedia** always work; **Brave/Tavily** activate only if their (free-tier) key is set. |
+| `BRAVE_API_KEY` | no | — | Optional **free-tier** Brave Search key — sharpens web results. Keyless search works without it. |
+| `TAVILY_API_KEY` | no | — | Optional **free-tier** Tavily key — sharpens web results. Keyless search works without it. |
 | `AUTH_MODE` | no | `shared` | `shared` (default) → today's single shared password, no accounts, byte-identical. `multi` → admin-provisioned **multi-user** mode: per-user accounts + private per-user conversations. **Requires `DATABASE_URL`.** See [Multi-user mode](#multi-user-mode-experimental). |
 | `ADMIN_USERNAME` | only if `AUTH_MODE=multi` | — | Username of the bootstrapped admin (seeded once when no admin exists). |
 | `ADMIN_PASSWORD` | only if `AUTH_MODE=multi` | — | Initial admin password (bootstrap only; change it after first sign-in at `/account`). |

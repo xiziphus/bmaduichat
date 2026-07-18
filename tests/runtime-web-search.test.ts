@@ -31,9 +31,14 @@ describe('toolSchemasFor — web_search offered ONLY to research skills (FR-41)'
 describe('web_search executor — free-tier only, honest degrade', () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it('degrades honestly (note-bearing) when no provider is configured', async () => {
-    vi.stubEnv('WEB_SEARCH_PROVIDER', '');
-    const exec = createToolExecutor(ctx());
+  it('falls to the honest note when the injected search throws', async () => {
+    const exec = createToolExecutor(
+      ctx({
+        webSearch: async () => {
+          throw new Error('boom');
+        },
+      }),
+    );
     const r = await exec({ name: 'web_search', args: { query: 'anything' } });
     expect(r.kind).toBe('result');
     if (r.kind === 'result') {

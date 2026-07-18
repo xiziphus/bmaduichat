@@ -82,10 +82,60 @@ export function providerLabel(p: Provider): string {
   return PROVIDER_LABEL[p];
 }
 
+/**
+ * Built-in fallback chain of known free (`:free`) OpenRouter models. Used when
+ * neither `OPENROUTER_MODELS` nor `OPENROUTER_MODEL` narrows the choice. It's
+ * fine if some ids 404 upstream — the connect-time fallback loop just skips to
+ * the next. All are `:free`, so metering (which reads the primary) stays at 0.
+ */
+const OPENROUTER_FREE_FALLBACKS = [
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'google/gemini-2.0-flash-exp:free',
+  'deepseek/deepseek-chat-v3-0324:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+];
+
+/**
+ * The ordered OpenRouter fallback chain — try the first; if it doesn't respond
+ * (rate-limit / error / unavailable) fall to the next at connect time.
+ *  - `OPENROUTER_MODELS` (comma-separated), if set, defines the exact order.
+ *  - Else start with `OPENROUTER_MODEL` (if set), then append the built-in free
+ *    defaults as further fallbacks.
+ * Deduped preserving order; never empty.
+ */
+export function openRouterModels(): string[] {
+  const chain: string[] = [];
+  const csv = process.env.OPENROUTER_MODELS;
+  if (csv && csv.trim()) {
+    for (const m of csv.split(',')) {
+      const t = m.trim();
+      if (t) chain.push(t);
+    }
+  } else {
+    const primary = process.env.OPENROUTER_MODEL?.trim();
+    if (primary) chain.push(primary);
+    chain.push(...OPENROUTER_FREE_FALLBACKS);
+  }
+  // Dedupe preserving order.
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const m of chain) {
+    if (!seen.has(m)) {
+      seen.add(m);
+      out.push(m);
+    }
+  }
+  // Never empty (e.g. OPENROUTER_MODELS set to only whitespace/commas).
+  if (out.length === 0) out.push(OPENROUTER_FREE_FALLBACKS[0]);
+  return out;
+}
+
 /** The model id the given provider will use, from env (with documented defaults). */
 export function modelForProvider(provider: Provider): string {
   if (provider === 'gemini') return process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-  return process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+  // The PRIMARY of the fallback chain — used for display/metering. All free
+  // models cost 0, so metering stays correct even when a fallback serves.
+  return openRouterModels()[0];
 }
 
 /**
@@ -131,6 +181,60 @@ async function providerFetch(
     // DNS failure, connection refused, network drop, etc.
     throw new ProviderError(provider, 502, 'unreachable', `${PROVIDER_LABEL[provider]} unreachable`);
   }
+}
+
+/**
+ * Connect to OpenRouter, trying each model in the fallback chain at CONNECT
+ * time. `buildBody` produces the request body for a candidate model. Returns
+ * the first Response that is ok (with a body) — the caller then streams/parses
+ * it with that model. On a non-ok status (429 rate-limit, 5xx, 400 model-
+ * unavailable, …) or a `providerFetch` network error, the next model is tried.
+ * If every model fails, the LAST ProviderError is thrown. Fallback is connect-
+ * time only: once tokens flow we cannot switch mid-stream.
+ */
+async function connectOpenRouterWithFallback(
+  apiKey: string,
+  buildBody: (model: string) => Record<string, unknown>,
+  models: string[],
+): Promise<{ res: Response; body: ReadableStream<Uint8Array>; model: string }> {
+  let lastError: ProviderError = new ProviderError(
+    'openrouter',
+    502,
+    'unreachable',
+    'OpenRouter unreachable',
+  );
+  for (const model of models) {
+    console.log(`[openrouter] trying model: ${model}`);
+    let res: Response;
+    try {
+      res = await providerFetch('openrouter', 'https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(buildBody(model)),
+      });
+    } catch (err) {
+      if (err instanceof ProviderError) {
+        console.error(`[openrouter] model ${model} network error (${err.kind}); trying next`);
+        lastError = err;
+        continue;
+      }
+      throw err;
+    }
+    if (res.ok && res.body) {
+      console.log(`[openrouter] using model: ${model}`);
+      return { res, body: res.body, model };
+    }
+    // Never propagate the upstream body — status only.
+    res.body?.cancel().catch(() => {});
+    console.error(`[openrouter] model ${model} upstream error (${res.status}); trying next`);
+    lastError = new ProviderError(
+      'openrouter',
+      res.status,
+      'upstream',
+      `OpenRouter upstream error (${res.status})`,
+    );
+  }
+  throw lastError;
 }
 
 /* ==========================================================================
@@ -395,31 +499,29 @@ async function openRouterToolTurn(
 ): Promise<ModelTurn> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new ProviderError('openrouter', 500, 'missing-key', 'OPENROUTER_API_KEY is not set');
-  const model = modelOverride || modelForProvider('openrouter');
+  // An explicit override pins one model; otherwise walk the free fallback chain.
+  const models = modelOverride ? [modelOverride] : openRouterModels();
 
-  const body: Record<string, unknown> = {
-    model,
-    stream: true,
-    stream_options: { include_usage: true },
-    messages: [{ role: 'system', content: system }, ...toOpenRouterMessages(messages)],
-  };
-  if (tools && tools.length > 0) body.tools = toOpenRouterTools(tools);
-
-  const res = await providerFetch('openrouter', 'https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok || !res.body) {
-    res.body?.cancel().catch(() => {});
-    throw new ProviderError('openrouter', res.status, 'upstream', `OpenRouter upstream error (${res.status})`);
-  }
+  const { body: resBody } = await connectOpenRouterWithFallback(
+    apiKey,
+    (model) => {
+      const reqBody: Record<string, unknown> = {
+        model,
+        stream: true,
+        stream_options: { include_usage: true },
+        messages: [{ role: 'system', content: system }, ...toOpenRouterMessages(messages)],
+      };
+      if (tools && tools.length > 0) reqBody.tools = toOpenRouterTools(tools);
+      return reqBody;
+    },
+    models,
+  );
 
   const usage: UsageTokens = { tokensIn: null, tokensOut: null };
   let text = '';
   // Accumulate streamed tool_call fragments keyed by their delta index.
   const acc = new Map<number, { id: string; name: string; args: string }>();
-  await drainSse(res.body, (payload) => {
+  await drainSse(resBody, (payload) => {
     if (!payload || payload === '[DONE]') return;
     let json: {
       choices?: {
@@ -599,32 +701,23 @@ async function streamOpenRouter(system: string, messages: Msg[]): Promise<ChatSt
   if (!apiKey) {
     throw new ProviderError('openrouter', 500, 'missing-key', 'OPENROUTER_API_KEY is not set');
   }
-  const model = modelForProvider('openrouter');
 
-  const res = await providerFetch('openrouter', 'https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
+  // Try each free model in order; the first that responds streams the reply.
+  const { body } = await connectOpenRouterWithFallback(
+    apiKey,
+    (model) => ({
       model,
       stream: true,
       // Ask for a final usage chunk (prompt/completion token counts).
       stream_options: { include_usage: true },
       messages: [{ role: 'system', content: system }, ...messages.map(openRouterMessage)],
     }),
-  });
-
-  if (!res.ok || !res.body) {
-    // Never propagate the upstream body — status only.
-    res.body?.cancel().catch(() => {});
-    throw new ProviderError('openrouter', res.status, 'upstream', `OpenRouter upstream error (${res.status})`);
-  }
+    openRouterModels(),
+  );
 
   const usage: UsageTokens = { tokensIn: null, tokensOut: null };
   const stream = mapTokens(
-    sseDataStream(res.body),
+    sseDataStream(body),
     (payload) => {
       const json = JSON.parse(payload) as {
         choices?: { delta?: { content?: string } }[];
