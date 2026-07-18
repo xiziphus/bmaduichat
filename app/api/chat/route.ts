@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authContext } from '@/lib/session';
-import { getConversation } from '@/lib/repo/conversations';
+import { getConversation, updateAgentSlug } from '@/lib/repo/conversations';
 import { buildMarySystemPrompt } from '@/lib/mary';
 import {
   streamChat,
@@ -417,6 +417,17 @@ export async function POST(req: NextRequest) {
   //   path); unverified → an honest degrade bubble + a builder note (FR-43).
   const agentSlug = typeof body.agentSlug === 'string' ? body.agentSlug : undefined;
   const code = typeof body.code === 'string' ? body.code : undefined;
+
+  // Remember the driving agent on the conversation so reopening it restores that
+  // agent (header + routing) instead of reverting to Mary. Best-effort.
+  if (process.env.PLAYGROUND_TREE === 'on' && agentSlug && conversationId && isPersistenceEnabled()) {
+    try {
+      await updateAgentSlug(conversationId, agentSlug, undefined, auth.userId);
+    } catch (err) {
+      console.error('[chat] agent_slug update failed', err instanceof Error ? err.name : typeof err);
+    }
+  }
+
   if (process.env.PLAYGROUND_TREE === 'on' && agentSlug && code) {
     const plan = planLaunch(agentSlug, code);
     if (plan && plan.kind === 'degrade') {

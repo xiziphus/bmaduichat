@@ -152,6 +152,7 @@ export default function ChatPane({
   onProviderChange,
   conversationId = null,
   initialMessages = [],
+  initialAgentSlug = null,
   onExchange,
   onDocument,
 }: {
@@ -159,6 +160,8 @@ export default function ChatPane({
   onProviderChange: (p: Provider) => void;
   conversationId?: string | null;
   initialMessages?: InitialMessage[];
+  /** The agent this conversation was last driven by — restored on reopen. */
+  initialAgentSlug?: string | null;
   onExchange?: () => void;
   onDocument?: (doc: DocState) => void;
 }) {
@@ -171,8 +174,13 @@ export default function ChatPane({
   const [activeAgent, setActiveAgent] = useState<{ name: string; icon: string; title: string } | null>(null);
   // The activated agent's slug — drives ROUTING: free chat after activation talks
   // to THIS agent's persona (not Mary), and typing one of its command codes
-  // launches that command. null = default brainstorming.
-  const [activeAgentSlug, setActiveAgentSlug] = useState<string | null>(null);
+  // launches that command. null = default brainstorming. Restored from the
+  // reopened conversation's persisted agent (Mary/default → null).
+  const [activeAgentSlug, setActiveAgentSlug] = useState<string | null>(() =>
+    initialAgentSlug && initialAgentSlug !== 'mary' && initialAgentSlug !== BRAINSTORM_AGENT
+      ? initialAgentSlug
+      : null,
+  );
   // Epic D — the tree command currently driving this conversation (verified
   // launches only). Threaded onto every send so continuation turns stay on the
   // same skill. Null on the default (flag-off) Mary path.
@@ -233,6 +241,27 @@ export default function ChatPane({
     return () => {
       alive = false;
     };
+  }, []);
+
+  // Restore the header identity for a reopened agent conversation (activeAgentSlug
+  // was seeded from the persisted agent_slug). No greeting is posted — it's a
+  // reopen, not a fresh activation. Runs once per mount (ChatPane remounts per
+  // conversation via its sessionKey).
+  useEffect(() => {
+    if (!activeAgentSlug) return;
+    let alive = true;
+    fetch(`/api/agents/${activeAgentSlug}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: AgentActivation | null) => {
+        if (alive && d) setActiveAgent({ name: d.name, icon: d.icon, title: d.title });
+      })
+      .catch(() => {
+        /* header just stays on the default if the agent can't load */
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Probe server-resolved modality support (OpenRouter model/env aware). Until it

@@ -41,6 +41,9 @@ export default function Home() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<InitialMessage[]>([]);
+  // The agent this conversation was last driven by (restored on reopen so the
+  // header + routing follow that agent instead of reverting to Mary).
+  const [initialAgentSlug, setInitialAgentSlug] = useState<string | null>(null);
   const [sessionKey, setSessionKey] = useState(0);
   // The doc pane reflects the conversation's latest artifact, updated live as a
   // wrap-up streams. Null → placeholder. In the no-DB path this is purely the
@@ -53,16 +56,24 @@ export default function Home() {
     writeActiveId(id);
     fetch(`/api/conversations/${id}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('thread fetch failed'))))
-      .then((data: { messages?: InitialMessage[]; artifact?: DocState | null }) => {
-        setInitialMessages(data.messages ?? []);
-        setDoc(data.artifact ?? null); // latest saved document, or placeholder
-        setSessionKey((k) => k + 1); // remount ChatPane so it seeds the thread
-      })
+      .then(
+        (data: {
+          messages?: InitialMessage[];
+          artifact?: DocState | null;
+          conversation?: { agent_slug?: string } | null;
+        }) => {
+          setInitialMessages(data.messages ?? []);
+          setInitialAgentSlug(data.conversation?.agent_slug ?? null);
+          setDoc(data.artifact ?? null); // latest saved document, or placeholder
+          setSessionKey((k) => k + 1); // remount ChatPane so it seeds the thread
+        },
+      )
       .catch(() => {
         // Missing/500 → drop the selection and refresh the list.
         setActiveId(null);
         writeActiveId(null);
         setInitialMessages([]);
+        setInitialAgentSlug(null);
         setDoc(null);
         void refreshList();
       });
@@ -202,6 +213,7 @@ export default function Home() {
         onProviderChange={setProvider}
         conversationId={enabled ? activeId : null}
         initialMessages={initialMessages}
+        initialAgentSlug={initialAgentSlug}
         onExchange={onExchange}
         onDocument={onDocument}
       />

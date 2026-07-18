@@ -222,3 +222,26 @@ export async function setArchived(
   );
   return rows[0] ?? null;
 }
+
+/**
+ * Remember which agent is driving a conversation, so reopening it restores that
+ * agent (header + routing) instead of reverting to Mary. Best-effort; owner
+ * scoping matches the other writers. Ignores empty slugs.
+ */
+export async function updateAgentSlug(
+  id: string,
+  agentSlug: string,
+  exec: QueryFn = query,
+  owner: Owner = null,
+): Promise<void> {
+  if (!agentSlug) return;
+  if (owner === null) {
+    await exec(`UPDATE conversations SET agent_slug = $2 WHERE id = $1`, [id, agentSlug]);
+    return;
+  }
+  await exec(`UPDATE conversations SET agent_slug = $2 WHERE id = $1 AND user_id = $3`, [
+    id,
+    agentSlug,
+    owner,
+  ]);
+}
