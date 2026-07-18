@@ -83,6 +83,12 @@ input { font-family: inherit; }
 .chip:disabled { opacity: .5; cursor: default; }
 .chip.soft { background: var(--mint); border-color: transparent; color: var(--mint-ink); }
 
+/* collapsible selector strip toggle */
+.selectorbar { display: flex; margin-top: 12px; }
+.selectortoggle { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1.5px solid #e6dcf0; color: var(--dim); font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: 5px 12px; border-radius: 99px; cursor: pointer; }
+.selectortoggle:hover { border-color: var(--vio); color: var(--vio); }
+.selectorchev { font-size: 13px; line-height: 1; }
+
 /* technique row */
 .techrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
 .techrow .lbl { font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
@@ -100,6 +106,10 @@ input { font-family: inherit; }
 .agentbtn:hover { border-color: var(--vio); color: var(--vio); }
 .agentbtn.on { background: var(--vio-soft); border-color: var(--vio); color: var(--vio); }
 .agentico { font-size: 14px; }
+/* level-1 roster expander: collapses the ~15-agent grid behind one button */
+.agentexpand { background: #fff; border: 1.5px dashed #d9cce8; color: var(--dim); font-size: 11px; font-weight: 800; padding: 6px 12px; border-radius: 99px; cursor: pointer; }
+.agentexpand:hover { border-color: var(--vio); color: var(--vio); }
+.agentexpand:disabled { opacity: .5; cursor: default; }
 .cmd { display: inline-flex; align-items: baseline; gap: 4px; max-width: 320px; background: var(--vio-soft); border: 1.5px solid transparent; color: var(--vio); font-size: 12px; font-weight: 800; padding: 6px 12px; border-radius: 99px; cursor: pointer; }
 .cmd:hover { border-color: var(--vio); }
 .cmd.on { border-color: var(--vio); box-shadow: 0 0 0 2px var(--vio-soft); }

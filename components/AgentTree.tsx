@@ -34,12 +34,16 @@ export type TreeAgent = {
 
 export default function AgentTree({
   disabled,
+  hidden,
   activeCode,
   onLaunch,
   onActivateAgent,
   onTreeLoaded,
 }: {
   disabled?: boolean;
+  /** Kept mounted (so the tree still loads) but rendered nothing — used when the
+   *  parent's selector strip is collapsed. */
+  hidden?: boolean;
   /** The currently-active command code, highlighted (if any). */
   activeCode?: string;
   onLaunch: (agentSlug: string, code: string, command: TreeCommand) => void;
@@ -50,6 +54,9 @@ export default function AgentTree({
 }) {
   const [agents, setAgents] = useState<TreeAgent[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // Level 1 (the ~15-agent roster) is collapsed by default: we show only the
+  // active agent + an "Agents ▾" expander so the roster isn't a wall of buttons.
+  const [gridOpen, setGridOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -71,7 +78,9 @@ export default function AgentTree({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!agents || agents.length === 0) return null;
+  // Rendered null while hidden, but the load effect above still runs so the
+  // parent's tree state (and its collapse toggle) stays populated.
+  if (!agents || agents.length === 0 || hidden) return null;
 
   const current = agents.find((a) => a.slug === selected) ?? agents[0];
 
@@ -79,24 +88,62 @@ export default function AgentTree({
     <div className="agenttree">
       <div className="agentrow">
         <span className="lbl">Agents</span>
-        {agents.map((a) => (
-          <button
-            key={a.slug}
-            type="button"
-            className={`agentbtn${a.slug === current.slug ? ' on' : ''}`}
-            disabled={disabled}
-            onClick={() => {
-              setSelected(a.slug);
-              // Greet on every active pick (including re-picking the same agent),
-              // but NOT on the initial default selection (see the load effect).
-              onActivateAgent?.(a.slug);
-            }}
-            title={a.name}
-          >
-            <span className="agentico">{a.icon ?? '🤖'}</span>
-            {a.name}
-          </button>
-        ))}
+        {gridOpen ? (
+          <>
+            {agents.map((a) => (
+              <button
+                key={a.slug}
+                type="button"
+                className={`agentbtn${a.slug === current.slug ? ' on' : ''}`}
+                disabled={disabled}
+                onClick={() => {
+                  setSelected(a.slug);
+                  // Greet on every active pick (including re-picking the same
+                  // agent), but NOT on the initial default (see the load effect).
+                  onActivateAgent?.(a.slug);
+                  setGridOpen(false); // picking an agent recollapses the roster
+                }}
+                title={a.name}
+              >
+                <span className="agentico">{a.icon ?? '🤖'}</span>
+                {a.name}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="agentexpand"
+              disabled={disabled}
+              onClick={() => setGridOpen(false)}
+              aria-expanded
+              title="Hide the agent roster"
+            >
+              ▴ Close
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="agentbtn on"
+              disabled={disabled}
+              onClick={() => setGridOpen(true)}
+              title={`${current.name} — click to switch agents`}
+            >
+              <span className="agentico">{current.icon ?? '🤖'}</span>
+              {current.name}
+            </button>
+            <button
+              type="button"
+              className="agentexpand"
+              disabled={disabled}
+              onClick={() => setGridOpen(true)}
+              aria-expanded={false}
+              title="Show all agents"
+            >
+              Agents ▾
+            </button>
+          </>
+        )}
       </div>
       <div className="cmdrow">
         <span className="lbl">{current.name}&rsquo;s commands</span>

@@ -190,6 +190,10 @@ export default function ChatPane({
   const [treeAgents, setTreeAgents] = useState<TreeAgent[]>([]);
   const [handoffChips, setHandoffChips] = useState<HandoffChip[]>([]);
   const [input, setInput] = useState('');
+  // Whole selector strip (techniques + agent tree) collapse state, persisted to
+  // localStorage. Default expanded on first use; loaded from storage in an effect
+  // (not a lazy initializer) to avoid an SSR/CSR hydration mismatch.
+  const [selectorsOpen, setSelectorsOpen] = useState(true);
   const [streaming, setStreaming] = useState(false);
   // Set only by the runtime-engine path (PLAYGROUND_ENGINE on) when a run HALTs
   // awaiting the user. Off by default — the hardcoded path never emits it, so
@@ -291,6 +295,28 @@ export default function ChatPane({
       /* corrupt/absent storage → start empty */
     }
   }, []);
+
+  // Restore the collapsed/expanded selector-strip preference.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('pg-selectors-open');
+      if (raw !== null) setSelectorsOpen(raw === '1');
+    } catch {
+      /* storage blocked → stay expanded */
+    }
+  }, []);
+
+  function toggleSelectors() {
+    setSelectorsOpen((open) => {
+      const next = !open;
+      try {
+        localStorage.setItem('pg-selectors-open', next ? '1' : '0');
+      } catch {
+        /* storage blocked → session-only */
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     const el = msgsRef.current;
@@ -888,6 +914,23 @@ export default function ChatPane({
 
   const lastMessage = messages[messages.length - 1];
 
+  // Contextual selector rules:
+  // - the technique row is a brainstorming construct → only in Mary/default
+  //   context (activeAgentSlug null); hidden once another agent is driving.
+  // - the agent tree shows whenever the roster has loaded (flag on).
+  const techEligible = pair !== null && activeAgentSlug === null;
+  const treeEligible = treeAgents.length > 0;
+  // Show the collapse pill whenever there's a strip to collapse. (AgentTree is
+  // kept mounted even while collapsed so treeEligible stays truthy — the pill
+  // never strands the user with no way back to an active agent's commands.)
+  const showSelectorToggle = techEligible || treeEligible;
+  const selectorLabel =
+    treeEligible && techEligible
+      ? 'Agents & techniques'
+      : treeEligible
+        ? 'Agents'
+        : 'Techniques';
+
   // Builder-notes drawer derived state (server vs localStorage mode).
   const serverMode = serverNotes !== null;
   const collectedNotes = serverNotes?.filter((n) => n.status === 'collected') ?? [];
@@ -1115,10 +1158,25 @@ export default function ChatPane({
         )}
       </div>
 
-      {pair && (
+      {showSelectorToggle && (
+        <div className="selectorbar">
+          <button
+            type="button"
+            className="selectortoggle"
+            onClick={toggleSelectors}
+            aria-expanded={selectorsOpen}
+            title={selectorsOpen ? 'Collapse to reclaim chat space' : 'Show the selectors'}
+          >
+            <span className="selectorchev">{selectorsOpen ? '⌄' : '⌃'}</span>
+            {selectorsOpen ? 'Hide' : ''} {selectorLabel}
+          </button>
+        </div>
+      )}
+
+      {selectorsOpen && techEligible && (
         <div className="techrow">
           <span className="lbl">Try a technique</span>
-          {pair.map((t) => (
+          {pair!.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -1143,6 +1201,7 @@ export default function ChatPane({
 
       <AgentTree
         disabled={streaming}
+        hidden={!selectorsOpen}
         activeCode={activeLaunch?.code}
         onLaunch={launchCommand}
         onActivateAgent={activateAgent}
