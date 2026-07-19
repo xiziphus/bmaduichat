@@ -7,6 +7,6 @@ import { streamChatWithTools, type Provider } from '@/lib/llm';
 import type { ModelClient } from './types';
 
 export function makeProviderClient(provider: Provider, model?: string): ModelClient {
-  return (system, messages, tools) =>
-    streamChatWithTools(provider, system, messages, tools, model);
+  return (system, messages, tools, onDelta) =>
+    streamChatWithTools(provider, system, messages, tools, model, onDelta);
 }

@@ -20,6 +20,9 @@ export type ModelClient = (
   system: string,
   messages: ToolMsg[],
   tools?: ToolSchema[],
+  /** Called with each user-facing text chunk as it streams, so the loop can
+   *  emit incremental `text` deltas. Optional — mock clients omit it. */
+  onDelta?: (chunk: string) => void,
 ) => Promise<ModelTurn>;
 
 /** The outcome of executing one tool call server-side. */

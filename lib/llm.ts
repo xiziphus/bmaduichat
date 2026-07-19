@@ -424,9 +424,10 @@ export async function streamChatWithTools(
   messages: ToolMsg[],
   tools?: ToolSchema[],
   modelOverride?: string,
+  onDelta?: (chunk: string) => void,
 ): Promise<ModelTurn> {
-  if (provider === 'gemini') return geminiToolTurn(system, messages, tools, modelOverride);
-  if (provider === 'openrouter') return openRouterToolTurn(system, messages, tools, modelOverride);
+  if (provider === 'gemini') return geminiToolTurn(system, messages, tools, modelOverride, onDelta);
+  if (provider === 'openrouter') return openRouterToolTurn(system, messages, tools, modelOverride, onDelta);
   throw new ProviderError(provider, 400, 'upstream', `Unknown provider: ${provider satisfies never}`);
 }
 
@@ -435,6 +436,7 @@ async function geminiToolTurn(
   messages: ToolMsg[],
   tools: ToolSchema[] | undefined,
   modelOverride?: string,
+  onDelta?: (chunk: string) => void,
 ): Promise<ModelTurn> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new ProviderError('gemini', 500, 'missing-key', 'GEMINI_API_KEY is not set');
@@ -473,7 +475,10 @@ async function geminiToolTurn(
     }
     const parts = json.candidates?.[0]?.content?.parts ?? [];
     for (const p of parts) {
-      if (typeof p.text === 'string') text += p.text;
+      if (typeof p.text === 'string') {
+        text += p.text;
+        onDelta?.(p.text);
+      }
       if (p.functionCall && p.functionCall.name) {
         toolCalls.push({
           id: `call_${toolCalls.length}`,
@@ -496,6 +501,7 @@ async function openRouterToolTurn(
   messages: ToolMsg[],
   tools: ToolSchema[] | undefined,
   modelOverride?: string,
+  onDelta?: (chunk: string) => void,
 ): Promise<ModelTurn> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new ProviderError('openrouter', 500, 'missing-key', 'OPENROUTER_API_KEY is not set');
@@ -538,7 +544,10 @@ async function openRouterToolTurn(
       return;
     }
     const delta = json.choices?.[0]?.delta;
-    if (delta?.content) text += delta.content;
+    if (delta?.content) {
+      text += delta.content;
+      onDelta?.(delta.content);
+    }
     for (const tc of delta?.tool_calls ?? []) {
       const idx = tc.index ?? 0;
       const cur = acc.get(idx) ?? { id: '', name: '', args: '' };

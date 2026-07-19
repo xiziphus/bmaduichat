@@ -12,6 +12,7 @@
  */
 import type {
   ModelClient,
+  ModelTurn,
   ToolSchema,
   ToolMsg,
   ToolCall,
@@ -103,6 +104,70 @@ async function runToolCall(
   }
 }
 
+/**
+ * Run ONE model turn, streaming its user-facing text as incremental `text`
+ * RunEvents while it arrives, and returning the completed `ModelTurn` plus the
+ * number of visible chars already emitted (so the caller doesn't re-yield them).
+ *
+ * A callback (`onDelta`) can't `yield`, so we bridge it to this generator via a
+ * chunk queue drained here. The guard withholds a forming `<tool>` sentinel in
+ * the structured-text path (`stripToolTags` drops a dangling open), so tool tags
+ * never leak to the client; native tool-calls carry no user text to stream.
+ * A mock client that never calls `onDelta` streams nothing here (emitted=0) — the
+ * caller then yields the full final text exactly as before (backward compatible).
+ */
+async function* streamModelTurn(
+  model: ModelClient,
+  system: string,
+  transcript: ToolMsg[],
+  tools: ToolSchema[] | undefined,
+  supportsTools: boolean,
+): AsyncGenerator<RunEvent, { turn: ModelTurn; emitted: number }, void> {
+  const chunks: string[] = [];
+  let wake: (() => void) | null = null;
+  let done = false;
+  const signal = () => {
+    const w = wake;
+    wake = null;
+    w?.();
+  };
+  const onDelta = (c: string) => {
+    if (c) {
+      chunks.push(c);
+      signal();
+    }
+  };
+  const pending = model(system, transcript, tools, onDelta).then(
+    (t) => {
+      done = true;
+      signal();
+      return t;
+    },
+    (e) => {
+      done = true;
+      signal();
+      throw e;
+    },
+  );
+
+  let raw = '';
+  let emitted = 0;
+  for (;;) {
+    while (chunks.length) raw += chunks.shift()!;
+    // Guarded visible text: native tools carry no inline sentinel; the fallback
+    // path strips completed AND dangling <tool> blocks so a forming tag is held.
+    const safe = supportsTools ? raw : stripToolTags(raw);
+    if (safe.length > emitted) {
+      yield { type: 'text', delta: safe.slice(emitted) };
+      emitted = safe.length;
+    }
+    if (done && chunks.length === 0) break;
+    if (!done) await new Promise<void>((r) => (wake = r));
+  }
+  const turn = await pending; // throws if the model call errored
+  return { turn, emitted };
+}
+
 export async function* runLoop(
   opts: RunLoopOptions,
 ): AsyncGenerator<RunEvent, LoopResult, void> {
@@ -114,10 +179,14 @@ export async function* runLoop(
   let lastText = '';
 
   for (let i = 0; i < max; i++) {
-    const turn = await opts.model(
+    // Stream this turn's user-facing text as it arrives; `emitted` is how many
+    // visible chars were already sent, so we don't re-yield them below.
+    const { turn, emitted } = yield* streamModelTurn(
+      opts.model,
       opts.system,
       transcript,
       opts.supportsTools ? opts.tools : undefined,
+      opts.supportsTools,
     );
 
     if (opts.supportsTools) {
@@ -137,9 +206,10 @@ export async function* runLoop(
         }
         continue;
       }
-      // Final user-facing turn.
+      // Final user-facing turn — yield only the tail not already streamed.
       transcript.push({ role: 'assistant', content: turn.text });
-      if (turn.text) yield { type: 'text', delta: turn.text };
+      const rest = turn.text.slice(emitted);
+      if (rest) yield { type: 'text', delta: rest };
       return { status: 'final', text: turn.text, transcript };
     }
 
@@ -173,7 +243,8 @@ export async function* runLoop(
     // No tool tag → final. Strip any dangling fragment defensively.
     const text = stripToolTags(turn.text);
     transcript.push({ role: 'assistant', content: text });
-    if (text) yield { type: 'text', delta: text };
+    const rest = text.slice(emitted);
+    if (rest) yield { type: 'text', delta: rest };
     return { status: 'final', text, transcript };
   }
 

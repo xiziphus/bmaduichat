@@ -295,3 +295,65 @@ describe('constants', () => {
     expect(DEFAULT_MAX_ITERATIONS).toBe(12);
   });
 });
+
+describe('runLoop — streaming', () => {
+  it('emits incremental text deltas (native) that concatenate to the final text, no double-send', async () => {
+    // A model that streams "Hello there!" in chunks via onDelta, then returns it.
+    const client: ModelClient = async (_s, _m, _t, onDelta) => {
+      // await between chunks so the loop interleaves (mimics network gaps).
+      for (const c of ['Hello', ' ', 'there', '!']) {
+        onDelta?.(c);
+        await Promise.resolve();
+      }
+      return { text: 'Hello there!', toolCalls: [], usage: noUsage };
+    };
+    const { events, result } = await drain(
+      runLoop({
+        model: client,
+        system: 'sys',
+        transcript: [{ role: 'user', content: 'hi' }],
+        tools: TOOL_SCHEMAS,
+        supportsTools: true,
+        executeTool: echoExecutor,
+      }),
+    );
+    const deltas = events.filter((e) => e.type === 'text').map((e) => (e as { delta: string }).delta);
+    expect(deltas.length).toBeGreaterThan(1); // genuinely incremental
+    expect(deltas.join('')).toBe('Hello there!'); // exact, no double-emission
+    expect(result.status).toBe('final');
+    if (result.status === 'final' || result.status === 'capped') {
+      expect(result.text).toBe('Hello there!');
+    }
+  });
+
+  it('withholds a forming <tool> sentinel from streamed text (structured-text fallback)', async () => {
+    // Fallback model streams prose then a tool tag; the tag must never be yielded.
+    const script =
+      'Let me look that up. <tool name="technique_query">{"kind":"list"}</tool>';
+    let sent = false;
+    const client: ModelClient = async (_s, _m, _t, onDelta) => {
+      if (!sent) {
+        sent = true;
+        for (const c of script.split('')) onDelta?.(c);
+        return { text: script, toolCalls: [], usage: noUsage };
+      }
+      return { text: 'Done.', toolCalls: [], usage: noUsage };
+    };
+    const { events } = await drain(
+      runLoop({
+        model: client,
+        system: 'sys',
+        transcript: [{ role: 'user', content: 'go' }],
+        tools: TOOL_SCHEMAS,
+        supportsTools: false, // structured-text fallback
+        executeTool: echoExecutor,
+      }),
+    );
+    const streamed = events
+      .filter((e) => e.type === 'text')
+      .map((e) => (e as { delta: string }).delta)
+      .join('');
+    expect(streamed).not.toContain('<tool'); // sentinel never leaked
+    expect(streamed).toContain('Done.'); // the final answer did stream
+  });
+});
