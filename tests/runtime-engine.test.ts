@@ -250,6 +250,46 @@ describe('runWorkflow — DB-off graceful', () => {
   });
 });
 
+describe('runWorkflow — monotonic brainstorming phase (Fix C)', () => {
+  it('never regresses phase across turns even when the per-turn signal flip-flops', async () => {
+    // A store that persists the run phase and serves it back via latestPhase —
+    // the ONLY cross-turn carrier (brainstorming turns finalize as `done`).
+    let lastPhase: string | null = null;
+    const persisted: (string | null)[] = [];
+    const store: RunStore = {
+      healStale: async () => {},
+      resolveRun: async () => ({ runId: 'r', resume: null }),
+      persistCheckpoint: async () => {},
+      persistTerminal: async (_id, _status, state) => {
+        lastPhase = state.phase;
+        persisted.push(state.phase);
+      },
+      latestPhase: async () => lastPhase,
+    };
+    const model: ModelClient = async () => ({ text: 'ok', toolCalls: [], usage: noUsage });
+    const run = (phase: 'diverge' | 'converge' | 'finalize') =>
+      collect(runWorkflow(base({ phase, deps: { model, persistence: true, store } })));
+
+    await run('diverge'); //  fresh → diverge
+    await run('converge'); // forward → converge
+    await run('diverge'); //  signal regresses; must stay converge
+    await run('finalize'); // forward → finalize
+    await run('converge'); // signal regresses; must stay finalize
+
+    expect(persisted).toEqual(['diverge', 'converge', 'converge', 'finalize', 'finalize']);
+  });
+
+  it('a store without latestPhase falls back to the per-turn signal (no crash)', async () => {
+    // memoryStore() omits latestPhase — the guard degrades to the signal.
+    const { store } = memoryStore();
+    const model: ModelClient = async () => ({ text: 'ok', toolCalls: [], usage: noUsage });
+    const ev = await collect(
+      runWorkflow(base({ phase: 'converge', deps: { model, persistence: true, store } })),
+    );
+    expect(ev.find((e) => e.type === 'done')).toMatchObject({ status: 'done' });
+  });
+});
+
 describe('runWorkflow — stale heal + cap', () => {
   it('calls store.healStale before touching the conversation', async () => {
     const { store, stats } = memoryStore();

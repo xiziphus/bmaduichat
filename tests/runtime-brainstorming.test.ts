@@ -3,6 +3,8 @@ import {
   composeBrainstormingPrompt,
   referencesForPhase,
   inferPhase,
+  normalizePhase,
+  maxPhase,
   ADAPTER_NOTE,
   ENGINE_OUTPUT_CONTRACT,
   PROMPT_SIZE_BUDGET,
@@ -132,6 +134,35 @@ describe('composeBrainstormingPrompt — verbatim SKILL.md + adapter note + APP_
     expect(inferPhase()).toBe('diverge');
     expect(inferPhase("let's narrow these down and prioritize")).toBe('converge');
     expect(inferPhase('ok wrap it up into a doc')).toBe('finalize');
+  });
+
+  it('names the on-demand references + read_reference tool (Fix B)', () => {
+    // The brainstorming skill ships references, so the hint line is present and
+    // mentions the tool + at least one real reference filename.
+    expect(prompt).toContain('read_reference tool');
+    expect(prompt).toContain('References you can load on demand');
+    expect(prompt).toContain('mode-partner.md');
+    // Still one compact line (not a content dump) — the tail contract still closes.
+    expect(prompt.trimEnd().endsWith(ENGINE_OUTPUT_CONTRACT.trimEnd())).toBe(true);
+  });
+});
+
+describe('normalizePhase / maxPhase — monotonic phase helpers (Fix C)', () => {
+  it('normalizePhase coerces only the three valid phases', () => {
+    expect(normalizePhase('diverge')).toBe('diverge');
+    expect(normalizePhase('converge')).toBe('converge');
+    expect(normalizePhase('finalize')).toBe('finalize');
+    expect(normalizePhase('nope')).toBeNull();
+    expect(normalizePhase(null)).toBeNull();
+    expect(normalizePhase(undefined)).toBeNull();
+  });
+
+  it('maxPhase never regresses (returns the further-along phase)', () => {
+    expect(maxPhase('diverge', 'converge')).toBe('converge');
+    expect(maxPhase('converge', 'diverge')).toBe('converge'); // no regression
+    expect(maxPhase('finalize', 'diverge')).toBe('finalize'); // no regression
+    expect(maxPhase('converge', 'finalize')).toBe('finalize'); // forward advance
+    expect(maxPhase('diverge', 'diverge')).toBe('diverge');
   });
 });
 

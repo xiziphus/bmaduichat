@@ -121,6 +121,18 @@ export function loadSkill(slug: string): LoadedSkill {
   return loaded;
 }
 
+/**
+ * One compact line naming a skill's on-demand references for the model, so it
+ * can actually use the `read_reference` tool (adaptMechanics strips the SKILL.md's
+ * own `references/...` path directives, leaving the model blind to them). Returns
+ * `undefined` when the skill ships no references (caller omits the line).
+ */
+export function referenceHintLine(names: string[]): string | undefined {
+  const clean = names.filter((n) => typeof n === 'string' && n.trim().length > 0);
+  if (clean.length === 0) return undefined;
+  return `References you can load on demand via the read_reference tool: ${clean.join(', ')}.`;
+}
+
 // ---------------------------------------------------------------------------
 // adaptMechanics — the FR-34 CLI→browser adapter seam
 // ---------------------------------------------------------------------------

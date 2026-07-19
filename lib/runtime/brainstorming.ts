@@ -28,7 +28,7 @@ import 'server-only';
  * The hardcoded `lib/mary.ts` path is unchanged and remains the DEFAULT; this
  * composer only runs when PLAYGROUND_ENGINE is on (see app/api/chat/route.ts).
  */
-import { loadSkill } from '@/lib/skills/loader';
+import { loadSkill, referenceHintLine } from '@/lib/skills/loader';
 import { APP_PROTOCOLS, techniqueInjection, buildMaryPersona } from '@/lib/mary';
 
 export const BRAINSTORMING_SLUG = 'bmad-brainstorming';
@@ -63,6 +63,23 @@ export const ENGINE_OUTPUT_CONTRACT = `OUTPUT CONTRACT — non-negotiable, appli
 
 /** The coarse session phase the composed prompt should cover. */
 export type BrainstormPhase = 'diverge' | 'converge' | 'finalize';
+
+/** Forward ordering of the phases (diverge → converge → finalize). */
+const PHASE_ORDER: Record<BrainstormPhase, number> = { diverge: 0, converge: 1, finalize: 2 };
+
+/** Coerce an arbitrary value to a `BrainstormPhase`, or `null` when it isn't one. */
+export function normalizePhase(v: unknown): BrainstormPhase | null {
+  return v === 'diverge' || v === 'converge' || v === 'finalize' ? v : null;
+}
+
+/**
+ * Monotonic forward max of two phases: returns whichever is further along, so a
+ * run's phase can only advance (diverge → converge → finalize), never regress —
+ * the guard behind Fix C (run-state phase, not a fresh per-turn regex).
+ */
+export function maxPhase(a: BrainstormPhase, b: BrainstormPhase): BrainstormPhase {
+  return PHASE_ORDER[b] > PHASE_ORDER[a] ? b : a;
+}
 
 /**
  * Phase → reference file selection. Loads ONLY the reference relevant to the
@@ -157,11 +174,15 @@ export function composeBrainstormingPrompt(opts: ComposeBrainstormingOptions = {
 
   const persona = buildMaryPersona();
   const injection = opts.technique ? techniqueInjection(opts.technique) : undefined;
+  // Name the skill's on-demand references so the model can use read_reference
+  // (omitted when the skill ships none).
+  const refHint = referenceHintLine(skill.references.names);
 
   const build = (includeRef: boolean): string => {
     // BMad text VERBATIM — no adaptMechanics, no distillation.
     const skillBlock = includeRef && refText ? `${skill.skillMd}\n\n${refText}` : skill.skillMd;
     const parts: string[] = [persona, ADAPTER_NOTE, skillBlock];
+    if (refHint) parts.push(refHint);
     if (injection) parts.push(injection);
     // App conventions LAST so they win attention.
     parts.push(APP_PROTOCOLS, ENGINE_OUTPUT_CONTRACT);

@@ -49,6 +49,19 @@ describe('composeAgentCommandPrompt — persona + adapted skill + app protocols'
     expect(prompt).not.toContain(ADAPTER_NOTE);
     expect(prompt).toContain(HONEST_LIMITS);
   });
+
+  it('names the target skill references + read_reference when the skill has them (Fix B)', () => {
+    // bmad-prd ships references → the hint line lists them and names the tool.
+    const prompt = composeAgentCommandPrompt({ agentSlug: 'bmad-agent-pm', skillSlug: 'bmad-prd' });
+    expect(prompt).toContain('References you can load on demand via the read_reference tool:');
+    expect(prompt).toContain('validate.md');
+  });
+
+  it('omits the reference line when the skill ships no references (Fix B)', () => {
+    // bmad-agent-pm (persona chat) has no references → no hint line at all.
+    const prompt = composeAgentCommandPrompt({ agentSlug: 'bmad-agent-pm', skillSlug: 'bmad-agent-pm' });
+    expect(prompt).not.toContain('read_reference tool');
+  });
 });
 
 /**

@@ -85,6 +85,30 @@ export async function getActiveRunForConversation(
   return rows[0] ?? null;
 }
 
+/**
+ * The most recently persisted non-null phase for a conversation+skill, across
+ * ANY status (including `done`). Backs the monotonic-phase guard: brainstorming
+ * turns finalize as `done`, so the prior phase can't be read via the active-run
+ * path — this reads it directly. Null when the conversation has no phased run.
+ */
+export async function getLatestPhaseForConversation(
+  conversationId: string,
+  skillSlug: string,
+  exec: QueryFn = query,
+): Promise<string | null> {
+  const rows = await exec<{ phase: string | null }>(
+    `SELECT phase
+       FROM workflow_runs
+      WHERE conversation_id = $1
+        AND skill_slug = $2
+        AND phase IS NOT NULL
+      ORDER BY updated DESC
+      LIMIT 1`,
+    [conversationId, skillSlug],
+  );
+  return rows[0]?.phase ?? null;
+}
+
 export type UpdateRunInput = {
   status?: WorkflowRunStatus;
   phase?: string | null;

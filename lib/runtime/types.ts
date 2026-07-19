@@ -67,6 +67,13 @@ export type RunStore = {
   }) => Promise<{ runId: string | null; resume: RunState | null }>;
   persistCheckpoint: (runId: string | null, state: RunState) => Promise<void>;
   persistTerminal: (runId: string | null, status: 'done' | 'failed', state: RunState) => Promise<void>;
+  /**
+   * The last persisted phase for a conversation+skill, or null when none. Backs
+   * the monotonic-phase guard (Fix C): the engine clamps this turn's phase
+   * forward against it. Optional — stores that can't read prior phase (or tests)
+   * omit it, and the engine falls back to the per-turn signal.
+   */
+  latestPhase?: (conversationId: string, skillSlug: string) => Promise<string | null>;
 };
 
 /**

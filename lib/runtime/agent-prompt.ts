@@ -20,7 +20,9 @@ import 'server-only';
  * BMad files stay byte-identical: the SKILL.md is adapted in-memory only
  * (adaptMechanics is the sole translation seam).
  */
-import { loadSkill, adaptMechanics } from '@/lib/skills/loader';
+import { readFileSync, existsSync, statSync } from 'fs';
+import path from 'path';
+import { loadSkill, adaptMechanics, referenceHintLine } from '@/lib/skills/loader';
 import { APP_PROTOCOLS } from '@/lib/mary';
 import { ADAPTER_NOTE, ENGINE_OUTPUT_CONTRACT } from './brainstorming';
 
@@ -32,6 +34,11 @@ type AgentConfig = {
   identity?: unknown;
   communication_style?: unknown;
   principles?: unknown;
+  /** BMad activation steps (arrays of instruction strings), usually empty today. */
+  activation_steps_prepend?: unknown;
+  activation_steps_append?: unknown;
+  /** Persistent facts: literal strings, or `file:<path>` pointers, usually empty today. */
+  persistent_facts?: unknown;
 };
 
 function scalar(v: unknown, fallback = ''): string {
@@ -40,6 +47,25 @@ function scalar(v: unknown, fallback = ''): string {
 
 function list(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.length > 0) : [];
+}
+
+/**
+ * Resolve a `file:`-prefixed persistent fact to its RAW contents, server-side.
+ * The spec (the part after `file:`) is resolved relative to the repo root
+ * (`process.cwd()`); `{project-root}` tokens expand to the same. Returns the file
+ * contents, or `undefined` when the path is empty, doesn't resolve, isn't a plain
+ * file, or can't be read — SKIP silently, never throw, never inject a broken token.
+ */
+function readFileFact(spec: string): string | undefined {
+  const rel = spec.trim().replace(/\{project-root\}/g, process.cwd());
+  if (!rel) return undefined;
+  const abs = path.isAbsolute(rel) ? rel : path.join(process.cwd(), rel);
+  try {
+    if (!existsSync(abs) || !statSync(abs).isFile()) return undefined;
+    return readFileSync(abs, 'utf8');
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -69,6 +95,31 @@ export function buildAgentPersona(agentSlug: string): string {
   if (principles.length > 0) {
     lines.push('', 'Principles:', ...principles.map((p) => `- ${p}`));
   }
+
+  // Activation steps (BMad `activation_steps_prepend` then `_append`). Usually
+  // empty today — inject NOTHING when so (no fabricated content).
+  const activation = [...list(agent.activation_steps_prepend), ...list(agent.activation_steps_append)];
+  if (activation.length > 0) {
+    lines.push('', 'On activation, perform these steps:', ...activation.map((s, i) => `${i + 1}. ${s}`));
+  }
+
+  // Persistent facts / context. Literal entries inject verbatim as bullets;
+  // `file:<path>` entries resolve server-side and inject their (adapted)
+  // contents. Unresolved file pointers are skipped silently. Usually empty today.
+  const factEntries: string[] = [];
+  for (const f of list(agent.persistent_facts)) {
+    const fileMatch = /^file:\s*(.+)$/i.exec(f.trim());
+    if (fileMatch) {
+      const content = readFileFact(fileMatch[1]);
+      if (content && content.trim()) factEntries.push(adaptMechanics(content));
+    } else {
+      factEntries.push(`- ${f}`);
+    }
+  }
+  if (factEntries.length > 0) {
+    lines.push('', 'Persistent facts / context:', ...factEntries);
+  }
+
   lines.push('', 'You are running inside Playground, a small browser app.');
   return lines.join('\n');
 }
@@ -91,11 +142,17 @@ export function composeAgentCommandPrompt(opts: {
   const persona = buildAgentPersona(opts.agentSlug);
   const parts: string[] = [persona];
 
+  // The slug whose SKILL.md + references back this prompt (target workflow for a
+  // skill-backed command; the agent's own for persona chat).
+  const loadedSlug = opts.skillSlug;
+  let loaded = false;
+
   if (opts.skillSlug !== opts.agentSlug) {
     // Skill-backed command: adapt the target workflow's SKILL.md.
     let skillText = `You are running the "${opts.skillSlug}" workflow.`;
     try {
       skillText = adaptMechanics(loadSkill(opts.skillSlug).skillMd);
+      loaded = true;
     } catch {
       /* keep the honest fallback line */
     }
@@ -107,8 +164,22 @@ export function composeAgentCommandPrompt(opts: {
     try {
       const skillText = adaptMechanics(loadSkill(opts.agentSlug).skillMd);
       parts.push(ADAPTER_NOTE, skillText);
+      loaded = true;
     } catch {
       /* no SKILL.md → persona-only */
+    }
+  }
+
+  // Tell the model which references it can pull on demand (read_reference tool).
+  // adaptMechanics strips the SKILL.md's own references/... path directives, so
+  // without this line the model has no way to know these files exist. Only when
+  // the SKILL.md actually loaded and the skill ships references.
+  if (loaded) {
+    try {
+      const hint = referenceHintLine(loadSkill(loadedSlug).references.names);
+      if (hint) parts.push(hint);
+    } catch {
+      /* no loadable skill → no hint */
     }
   }
 

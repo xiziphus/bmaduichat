@@ -19,6 +19,7 @@ import {
   createRun,
   getRun,
   getActiveRunForConversation,
+  getLatestPhaseForConversation,
   updateRun,
   healStaleRuns,
   type WorkflowRun,
@@ -130,6 +131,22 @@ export async function persistTerminal(
   await updateRun(runId, { status, phase: state.phase ?? null, stateJson: state });
 }
 
+/**
+ * The last persisted phase for a conversation+skill (monotonic-phase guard, Fix
+ * C). No-op-safe (null) when persistence is off or the read fails.
+ */
+export async function latestPhase(
+  conversationId: string,
+  skillSlug: string,
+): Promise<string | null> {
+  if (!isPersistenceEnabled()) return null;
+  try {
+    return await getLatestPhaseForConversation(conversationId, skillSlug);
+  } catch {
+    return null;
+  }
+}
+
 /** The default Neon-backed run store the engine uses in production. */
 export const dbRunStore: RunStore = {
   healStale: async () => {
@@ -138,4 +155,5 @@ export const dbRunStore: RunStore = {
   resolveRun,
   persistCheckpoint,
   persistTerminal,
+  latestPhase,
 };

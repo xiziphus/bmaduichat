@@ -22,6 +22,8 @@ import { dbRunStore, STALE_APOLOGY } from './state';
 import {
   BRAINSTORMING_SLUG,
   composeBrainstormingPrompt,
+  normalizePhase,
+  maxPhase,
   type BrainstormPhase,
 } from './brainstorming';
 import { composeAgentCommandPrompt } from './agent-prompt';
@@ -182,6 +184,22 @@ export async function* runWorkflow(
   // Best-effort auto-heal of crashed runs before we touch this conversation.
   if (persistence) await store.healStale();
 
+  // Fix C — monotonic brainstorming phase. The route passes a per-turn regex
+  // SIGNAL (opts.phase) that can flip-flop (converge→diverge). We clamp it
+  // FORWARD against the last phase persisted for this conversation so the phase
+  // never regresses within a run (diverge → converge → finalize). Read the prior
+  // phase BEFORE resolveRun creates this turn's run row. Only meaningful when
+  // persistence is on and the store can read prior phase; otherwise we fall back
+  // to the signal (documented degradation — no cross-turn state exists then).
+  let priorPhase: BrainstormPhase | null = null;
+  if (persistence && opts.skillSlug === BRAINSTORMING_SLUG && store.latestPhase) {
+    try {
+      priorPhase = normalizePhase(await store.latestPhase(opts.conversationId, opts.skillSlug));
+    } catch {
+      priorPhase = null;
+    }
+  }
+
   // Resolve the run (new vs resume). When persistence is off, runId is null.
   let runId: string | null = null;
   let resume: RunState | null = null;
@@ -201,13 +219,27 @@ export async function* runWorkflow(
     }
   }
 
+  // Fold a resumed run's persisted phase into the monotonic guard, then clamp
+  // this turn's signal forward. Non-brainstorming skills keep phase untouched.
+  if (resume) {
+    const rp = normalizePhase(resume.phase);
+    if (rp) priorPhase = priorPhase ? maxPhase(priorPhase, rp) : rp;
+  }
+  let effectivePhase: BrainstormPhase | null = null;
+  if (opts.skillSlug === BRAINSTORMING_SLUG) {
+    const signal = normalizePhase(opts.phase) ?? 'diverge';
+    effectivePhase = priorPhase ? maxPhase(priorPhase, signal) : signal;
+  }
+  // The phase this run persists (drives the NEXT turn's forward clamp).
+  const runPhase: string | null = effectivePhase ?? resume?.phase ?? null;
+
   // Build system + seed transcript. Resume re-enters with the persisted stack +
   // the user's answer appended; a fresh run starts from the user's input.
   const system =
     resume?.system ??
     buildSystemPrompt(opts.skillSlug, supportsTools, {
       technique: opts.technique,
-      phase: opts.phase,
+      phase: effectivePhase ?? opts.phase,
       agentSlug: opts.agentSlug,
     });
   const currentTurn: ToolMsg = {
@@ -267,7 +299,7 @@ export async function* runWorkflow(
     void err;
     if (persistence && runId) {
       await store.persistTerminal(runId, 'failed', {
-        phase: resume?.phase ?? null,
+        phase: runPhase,
         skillSlug: opts.skillSlug,
         provider: opts.provider,
         model: opts.model ?? null,
@@ -281,7 +313,7 @@ export async function* runWorkflow(
   }
 
   const baseState = (pendingPrompt: string | null): RunState => ({
-    phase: resume?.phase ?? null,
+    phase: runPhase,
     skillSlug: opts.skillSlug,
     provider: opts.provider,
     model: opts.model ?? null,
